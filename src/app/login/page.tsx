@@ -1,46 +1,61 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useActionState } from "react";
+import { login } from "./actions";
 
 export default function LoginPage() {
-  const supabase = createClient();
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: "http://localhost:3000/auth/callback",
-      },
-    });
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    setMessage("ログインリンクを送信しました。メールを確認してください。");
-  };
+  const [state, formAction, isPending] = useActionState(
+    async (prevState: any, formData: FormData) => {
+      return await login(formData);
+    },
+    null
+  );
 
   return (
-    <main className="mx-auto max-w-md p-6 space-y-4">
-      <h1 className="text-2xl font-bold">ログイン</h1>
-      <input
-        type="email"
-        className="w-full rounded border p-2"
-        placeholder="メールアドレス"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <button
-        onClick={handleLogin}
-        className="rounded bg-black px-4 py-2 text-white"
-      >
-        ログインリンク送信
-      </button>
-      {message && <p>{message}</p>}
-    </main>
+    <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+      <main className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
+        <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">
+          MINORU勤怠 ログイン
+        </h1>
+        <form action={formAction} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="email">
+              メールアドレス
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+              placeholder="admin@example.com"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="password">
+              パスワード
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              className="w-full rounded-md border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+              placeholder="••••••••"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isPending}
+            className="w-full rounded-md bg-blue-600 px-4 py-2 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isPending ? "ログイン中..." : "ログイン"}
+          </button>
+          {state?.error && (
+            <p className="text-center text-sm font-bold text-red-500">{state.error}</p>
+          )}
+        </form>
+      </main>
+    </div>
   );
 }
