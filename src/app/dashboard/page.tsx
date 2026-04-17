@@ -14,7 +14,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import {
   confirmLatestPeriodShifts,
@@ -259,7 +258,6 @@ function EmptyState() {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
   const { userId } = await auth();
   const user = await currentUser();
 
@@ -267,16 +265,16 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  let { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single();
-
   const supabaseAdmin = createSupabaseAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+
+  let { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
 
   if (!profile || profile.role !== "admin") {
     await supabaseAdmin.from("profiles").upsert(
