@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINORU勤怠 - 勤怠管理はこれひとつ。驚きのコスパなら</title>
+    <meta name="description" content="12万社以上が登録する勤怠管理システム。ブラウザ/ICカード/LINE/Slackでの打刻、豊富な機能が無料からお使いいただけます。">
+    <meta name="view-transition" content="same-origin">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lato', 'Noto Sans JP', sans-serif;
+            color: #333333;
+        }
+        .bg-primary { background-color: #0457a7; }
+        .bg-secondary { background-color: #005a96; }
+        .bg-accent { background-color: #e4c057; }
+        .bg-error { background-color: #e73858; }
+        .text-primary { color: #0457a7; }
+        .text-accent { color: #e4c057; }
+        .border-primary { border-color: #0457a7; }
+
+        .hero-clip {
+            clip-path: polygon(100% 0, 100% 100%, 0% 100%, 35% 0%);
+        }
+        
+        @view-transition {
+            navigation: auto;
+        }
+
+        .diagonal-bg {
+            background: linear-gradient(135deg, #0457a7 65%, #e4c057 65.1%);
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float {
+            animation: float 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen bg-white flex flex-col">
+        <!-- Header -->
+        <header class="sticky top-0 z-50 bg-white border-b border-gray-100 h-20 flex items-center shadow-sm" style="view-transition-name: main-nav">
+            <div class="container mx-auto px-6 flex justify-between items-center">
+                <div class="flex items-center gap-12">
+                    <a href="/" id="nav-logo-link" class="flex items-center">
+                        <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/uploads/58d5a5b6-fed4-4e95-bc35-c33cceb99a1a/1776146271579-b8993be8/logo.jpg" alt="MINORU勤怠" class="h-10 w-auto object-contain">
+                    </a>
+                    <nav class="hidden lg:flex items-center gap-8">
+                        <a href="#method" id="nav-method-link" class="text-[14px] font-bold text-primary hover:opacity-70 transition-opacity">打刻方法</a>
+                        <a href="#pricing" id="nav-pricing-link" class="text-[14px] font-bold text-primary hover:opacity-70 transition-opacity">料金プラン</a>
+                        <a href="#cases" id="nav-cases-link" class="text-[14px] font-bold text-primary hover:opacity-70 transition-opacity">導入事例</a>
+                        <a href="#seminar" id="nav-seminar-link" class="text-[14px] font-bold text-primary hover:opacity-70 transition-opacity">セミナー</a>
+                        <a href="#contact" id="nav-contact-link" class="text-[14px] font-bold text-primary hover:opacity-70 transition-opacity">お問い合わせ</a>
+                    </nav>
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="#documents" id="header-doc-btn" class="hidden sm:flex border-2 border-primary text-primary px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-50 transition-colors">
+                        サービス資料
+                    </a>
+                    <a href="#trial" id="header-trial-btn" class="bg-error text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-opacity-90 transition-all flex items-center gap-2">
+                        無料でお試し
+                        <iconify-icon icon="lucide:external-link"></iconify-icon>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="relative overflow-hidden min-h-[700px] flex items-center diagonal-bg">
+            <div class="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center py-20 relative z-10">
+                <div class="text-white">
+                    <div class="mb-6">
+                        <span class="text-[12px] opacity-80 block mb-2">【MINORU（ミノル）勤怠】無料で使える勤怠管理システム</span>
+                        <h1 class="text-[40px] lg:text-[50px] font-bold leading-tight mb-8 whitespace-pre-line tracking-tight">
+                            勤怠管理はこれひとつ。
+                            驚きのコスパなら
+                            MINORU勤怠
+                        </h1>
+                    </div>
+
+                    <div class="mb-12 flex flex-col sm:flex-row gap-6 items-center">
+                        <img src="https://pquxfbbxflqvtidtlrhl.supabase.co/storage/v1/object/public/hmac-uploads/brand/3beb5b9b-3d2f-40ed-82a2-eafb3a43fe92/assets/f1495936-e5f1-41c4-884e-6e1e99d2af2f.webp" alt="導入社数12万社突破" class="h-24 w-auto drop-shadow-xl">
+                        <div class="bg-accent text-[#333333] p-4 rounded-full w-40 h-40 flex flex-col items-center justify-center text-center font-bold shadow-2xl animate-float border-4 border-white">
+                            <span class="text-lg">¥0</span>
+                            <span class="text-xs">から使える！</span>
+                            <div class="w-full h-px bg-[#333333] my-1 opacity-20"></div>
+                            <span class="text-[10px]">有料でも</span>
+                            <span class="text-xl">¥100</span>
+                            <span class="text-[10px]">/月(税抜)~</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-4">
+                        <a href="#" id="hero-red-cta" class="bg-error text-white text-[20px] font-bold px-10 py-5 rounded-lg shadow-xl hover:scale-105 transition-transform flex items-center gap-3">
+                            無料で試してみる
+                            <iconify-icon icon="lucide:external-link" class="text-2xl"></iconify-icon>
+                        </a>
+                        <a href="#" id="hero-white-cta" class="bg-white text-primary text-[20px] font-bold px-10 py-5 rounded-lg border-2 border-transparent hover:bg-blue-50 transition-all shadow-lg">
+                            まずは資料請求
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Hero Visuals -->
+                <div class="relative lg:h-[600px] flex items-center justify-center lg:justify-end">
+                    <div class="relative z-20">
+                        <div class="bg-white p-2 rounded-2xl shadow-2xl border-4 border-blue-100 transform -rotate-2">
+                            <img src="https://pquxfbbxflqvtidtlrhl.supabase.co/storage/v1/object/public/hmac-uploads/brand/3beb5b9b-3d2f-40ed-82a2-eafb3a43fe92/assets/fad2f7d8-52a1-4111-ada1-17db1dd16e18.webp" alt="UI Dashboard" class="rounded-xl w-full max-w-[580px] object-cover">
+                        </div>
+                        <div class="absolute -bottom-10 -left-10 bg-white p-2 rounded-xl shadow-2xl border-2 border-gray-100 hidden md:block animate-float" style="animation-delay: 1s;">
+                            <img src="https://pquxfbbxflqvtidtlrhl.supabase.co/storage/v1/object/public/hmac-uploads/brand/3beb5b9b-3d2f-40ed-82a2-eafb3a43fe92/assets/824c9707-315c-4ec9-a6c4-a5d9a33c0807.webp" alt="UI Payroll" class="rounded-lg w-64">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Decorative Background Element -->
+            <div class="absolute top-0 right-0 w-1/3 h-full hero-clip bg-[#005a96] opacity-30 pointer-events-none"></div>
+        </section>
+
+        <!-- Value Proposition / Comparison Title -->
+        <section class="py-20 bg-white">
+            <div class="container mx-auto px-6 text-center">
+                <p class="text-primary font-bold text-xl mb-4">勤怠管理システムでお悩みの方へ</p>
+                <h2 class="text-[40px] font-bold text-[#333333] tracking-tight mb-16">
+                    価格で比べてください
+                </h2>
+
+                <div class="max-w-5xl mx-auto grid md:grid-cols-2 gap-8">
+                    <!-- Case 1: Small -->
+                    <div class="bg-blue-50 rounded-3xl p-10 border border-blue-100 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-[24px] font-bold mb-6 text-primary">利用人数30名以下なら</h3>
+                            <div class="bg-white rounded-2xl p-8 mb-8 shadow-sm">
+                                <p class="text-gray-500 mb-2 font-bold">他社製品の場合</p>
+                                <p class="text-2xl font-bold text-gray-400 line-through mb-4">月額 ¥15,000~</p>
+                                <div class="h-px bg-gray-200 w-full mb-6"></div>
+                                <p class="text-primary font-bold text-sm mb-1">MINORU勤怠なら</p>
+                                <p class="text-[48px] font-bold text-primary flex items-end justify-center">
+                                    <span class="text-2xl mb-3">¥</span>0
+                                </p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-[16px] leading-relaxed">
+                            初期費用も月額費用もかかりません。まずは少人数から始めたい企業様に最適です。
+                        </p>
+                    </div>
+
+                    <!-- Case 2: Large -->
+                    <div class="bg-blue-50 rounded-3xl p-10 border border-blue-100 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-[24px] font-bold mb-6 text-primary">利用人数31名以上なら</h3>
+                            <div class="bg-white rounded-2xl p-8 mb-8 shadow-sm ring-4 ring-accent/30">
+                                <p class="text-gray-500 mb-2 font-bold">他社製品の場合</p>
+                                <p class="text-2xl font-bold text-gray-400 line-through mb-4">月額 ¥400 / 人</p>
+                                <div class="h-px bg-gray-200 w-full mb-6"></div>
+                                <p class="text-primary font-bold text-sm mb-1">MINORU勤怠なら</p>
+                                <p class="text-[48px] font-bold text-primary flex items-end justify-center">
+                                    <span class="text-2xl mb-3 leading-none">¥</span>100
+                                    <span class="text-xl mb-3 ml-1 leading-none">/ 人</span>
+                                </p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-[16px] leading-relaxed">
+                            業界最安クラスの価格設定。多機能ながら1名あたりのコストを大幅に抑えることが可能です。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature Icons -->
+        <section class="py-20 bg-gray-50 border-t border-gray-100">
+            <div class="container mx-auto px-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                    <div class="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                        <div class="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                            <iconify-icon icon="lucide:smartphone" class="text-3xl"></iconify-icon>
+                        </div>
+                        <p class="font-bold">スマホ打刻</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                        <div class="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                            <iconify-icon icon="lucide:id-card" class="text-3xl"></iconify-icon>
+                        </div>
+                        <p class="font-bold">ICカード対応</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                        <div class="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                            <iconify-icon icon="lucide:message-square" class="text-3xl"></iconify-icon>
+                        </div>
+                        <p class="font-bold">LINE連携</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                        <div class="w-16 h-16 bg-blue-100 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                            <iconify-icon icon="lucide:slack" class="text-3xl"></iconify-icon>
+                        </div>
+                        <p class="font-bold">Slack打刻</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bottom CTA -->
+        <section class="py-24 bg-primary text-white text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-full bg-[#005a96] opacity-20 skew-y-3 origin-top-left"></div>
+            <div class="container mx-auto px-6 relative z-10">
+                <h2 class="text-[32px] font-bold mb-10">まずは無料ではじめてみませんか？</h2>
+                <div class="flex flex-col sm:flex-row justify-center gap-6">
+                    <a href="#" id="bottom-red-cta" class="bg-error text-white text-[20px] font-bold px-12 py-6 rounded-lg shadow-2xl hover:bg-opacity-90 transition-all">
+                        無料で試してみる
+                    </a>
+                    <a href="#" id="bottom-white-cta" class="bg-white text-primary text-[20px] font-bold px-12 py-6 rounded-lg shadow-2xl hover:bg-gray-100 transition-all">
+                        資料をダウンロード
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="bg-[#333333] text-white py-16">
+            <div class="container mx-auto px-6">
+                <div class="flex flex-col md:flex-row justify-between items-start border-b border-white/10 pb-12 mb-12 gap-12">
+                    <div>
+                        <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/uploads/58d5a5b6-fed4-4e95-bc35-c33cceb99a1a/1776146271579-b8993be8/logo.jpg" alt="MINORU勤怠" class="h-8 brightness-0 invert mb-6">
+                        <p class="text-sm text-gray-400 max-w-sm">
+                            「MINORU勤怠」は、12万社以上が登録する勤怠管理システムです。豊富な機能が無料からお使いいただけます。
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-12">
+                        <div>
+                            <p class="font-bold mb-6">機能</p>
+                            <ul class="space-y-4 text-sm text-gray-400">
+                                <li><a href="#" id="footer-link-1" class="hover:text-white">打刻方法</a></li>
+                                <li><a href="#" id="footer-link-2" class="hover:text-white">申請・承認</a></li>
+                                <li><a href="#" id="footer-link-3" class="hover:text-white">シフト管理</a></li>
+                                <li><a href="#" id="footer-link-4" class="hover:text-white">データ出力</a></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <p class="font-bold mb-6">サポート</p>
+                            <ul class="space-y-4 text-sm text-gray-400">
+                                <li><a href="#" id="footer-link-5" class="hover:text-white">ヘルプセンター</a></li>
+                                <li><a href="#" id="footer-link-6" class="hover:text-white">導入支援</a></li>
+                                <li><a href="#" id="footer-link-7" class="hover:text-white">セミナー</a></li>
+                                <li><a href="#" id="footer-link-8" class="hover:text-white">よくある質問</a></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <p class="font-bold mb-6">会社情報</p>
+                            <ul class="space-y-4 text-sm text-gray-400">
+                                <li><a href="#" id="footer-link-9" class="hover:text-white">運営会社</a></li>
+                                <li><a href="#" id="footer-link-10" class="hover:text-white">利用規約</a></li>
+                                <li><a href="#" id="footer-link-11" class="hover:text-white">プライバシーポリシー</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-xs text-center text-gray-500">© MINORU Attendance Management System Inc. All Rights Reserved.</p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

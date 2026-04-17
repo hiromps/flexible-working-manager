@@ -1,3 +1,10 @@
+# Layouts
+
+## `src/app/layout.tsx`
+
+Description: Root layout that installs Clerk provider, Geist fonts, and global CSS.
+
+```tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -34,3 +41,7 @@ export default function RootLayout({
     </ClerkProvider>
   );
 }
+```
+
+No shared sidebar/header/footer component exists. Header structures are page-local.
+

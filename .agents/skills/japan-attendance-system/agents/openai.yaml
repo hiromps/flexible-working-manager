@@ -1,0 +1,4 @@
+interface:
+  display_name: "Japan Attendance System"
+  short_description: "Guides Japanese attendance and variable-hours work"
+  default_prompt: "Use $japan-attendance-system to review requirements and implementation choices for this Japanese attendance system."
