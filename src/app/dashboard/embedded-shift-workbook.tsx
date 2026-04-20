@@ -431,8 +431,8 @@ export function EmbeddedShiftWorkbook({
         <input name="fullName" type="hidden" value={fullName} />
         <input name="department" type="hidden" value={department} />
 
-        <div className="grid grid-cols-2 gap-4 border-b border-gray-100 p-5 sm:grid-cols-4 lg:grid-cols-12">
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-1 sm:col-span-1 lg:col-span-2">
+        <div className="grid grid-cols-12 gap-4 border-b border-gray-100 p-5">
+          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-6 sm:col-span-3 lg:col-span-2">
             年
             <input
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold"
@@ -447,7 +447,7 @@ export function EmbeddedShiftWorkbook({
               value={year}
             />
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-1 sm:col-span-1 lg:col-span-2">
+          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-6 sm:col-span-3 lg:col-span-2">
             月
             <select
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold"
@@ -465,7 +465,7 @@ export function EmbeddedShiftWorkbook({
               ))}
             </select>
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-1 sm:col-span-1 lg:col-span-2">
+          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-12 sm:col-span-6 lg:col-span-2">
             締日
             <select
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold"
@@ -479,7 +479,7 @@ export function EmbeddedShiftWorkbook({
               <option value="20日締">20日締</option>
             </select>
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-1 sm:col-span-1 lg:col-span-2">
+          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-12 sm:col-span-12 lg:col-span-2">
             週法定
             <select
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold"
@@ -490,7 +490,7 @@ export function EmbeddedShiftWorkbook({
               <option value={44}>44時間</option>
             </select>
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-2 sm:col-span-4 lg:col-span-4">
+          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-12 sm:col-span-12 lg:col-span-4">
             既存社員
             <select
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold"
