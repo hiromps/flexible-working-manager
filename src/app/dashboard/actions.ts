@@ -29,6 +29,10 @@ type PeriodRow = {
 type EmployeeRow = {
   id: number;
   weekly_legal_hours: number;
+  is_under_18?: boolean;
+  has_pregnancy_restriction?: boolean;
+  needs_care_consideration?: boolean;
+  care_notes?: string | null;
 };
 
 type ShiftRow = {
@@ -374,7 +378,7 @@ export async function saveEmbeddedShiftWorkbook(
           is_variable_monthly: true,
         })
         .eq("id", employeeIdValue)
-        .select("id, weekly_legal_hours")
+        .select("id, weekly_legal_hours, is_under_18, has_pregnancy_restriction, needs_care_consideration, care_notes")
         .single();
 
       if (error || !data) {
@@ -395,7 +399,7 @@ export async function saveEmbeddedShiftWorkbook(
           },
           { onConflict: "employee_code" },
         )
-        .select("id, weekly_legal_hours")
+        .select("id, weekly_legal_hours, is_under_18, has_pregnancy_restriction, needs_care_consideration, care_notes")
         .single();
 
       if (error || !data) {
@@ -405,6 +409,25 @@ export async function saveEmbeddedShiftWorkbook(
     }
 
     const savedEmployee = employee;
+
+    // --- Compliance Check ---
+    const { checkCompliance } = await import("@/lib/attendance/compliance");
+    const complianceInfo = {
+      is_under_18: !!savedEmployee.is_under_18,
+      has_pregnancy_restriction: !!savedEmployee.has_pregnancy_restriction,
+      needs_care_consideration: !!savedEmployee.needs_care_consideration,
+      care_notes: savedEmployee.care_notes,
+    };
+    const warnings = checkCompliance(complianceInfo, parsedRows);
+    const errors = warnings.filter(w => w.level === "error");
+    
+    if (errors.length > 0) {
+      return {
+        status: "error",
+        message: "コンプライアンス違反があるためシフトを保存できません。",
+        details: errors.map(e => `${e.message} ${e.details?.join(", ") ?? ""}`),
+      };
+    }
 
     const { data: existingPeriods, error: periodFindError } = await supabase
       .from("monthly_periods")
@@ -528,17 +551,21 @@ export async function saveEmbeddedShiftWorkbook(
     revalidatePath("/dashboard");
     revalidatePath("/attendance");
 
+    const careWarnings = warnings.filter(w => w.level === "warning");
+    const resultDetails = overMinutes > 0
+      ? [`法定総枠を${Math.round((overMinutes / 60) * 10) / 10}時間超過しています。休日数または勤務時間を調整してください。`]
+      : ["法定総枠内に収まっています。"];
+      
+    if (careWarnings.length > 0) {
+      resultDetails.push(...careWarnings.map(w => `${w.message} ${w.details?.join(", ") ?? ""}`));
+    }
+
     return {
       status: "success",
       message: `${shiftPayload.length}日のシフト表を作成しました。総予定 ${Math.round(
         (plannedMinutes / 60) * 10,
       ) / 10}時間 / 法定総枠 ${Math.round((legalTotalMinutes / 60) * 10) / 10}時間。`,
-      details:
-        overMinutes > 0
-          ? [
-              `法定総枠を${Math.round((overMinutes / 60) * 10) / 10}時間超過しています。休日数または勤務時間を調整してください。`,
-            ]
-          : ["法定総枠内に収まっています。"],
+      details: resultDetails,
     };
   } catch (error) {
     return {
