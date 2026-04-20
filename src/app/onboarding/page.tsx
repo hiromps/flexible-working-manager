@@ -39,6 +39,7 @@ export default async function OnboardingPage() {
     if (!userId) throw new Error("Unauthorized");
 
     const fullName = String(formData.get("fullName") || "").trim();
+    const inputEmployeeCode = String(formData.get("employeeCode") || "").trim();
     const department = String(formData.get("department") || "").trim() || null;
     const weeklyLegalHours = Number(formData.get("weeklyLegalHours")) || 40;
 
@@ -58,18 +59,52 @@ export default async function OnboardingPage() {
       { onConflict: "id" }
     );
 
-    const employeeCode = `EMP-${userId.slice(-6).toUpperCase()}`;
+    // 連携先の社員を探す (社員コードが入力された場合)
+    let existingEmployee = null;
+    if (inputEmployeeCode) {
+      const { data } = await supabaseAdmin
+        .from("employees")
+        .select("id, user_id")
+        .eq("employee_code", inputEmployeeCode)
+        .single();
+        
+      if (data) {
+        if (data.user_id && data.user_id !== userId) {
+          throw new Error("入力された社員コードは既に別のアカウントと連携されています。");
+        }
+        existingEmployee = data;
+      }
+    }
 
-    const { error } = await supabaseAdmin.from("employees").insert({
-      user_id: userId,
-      employee_code: employeeCode,
-      full_name: fullName,
-      department: department,
-      weekly_legal_hours: weeklyLegalHours,
-    });
+    if (existingEmployee) {
+      // 既存の社員レコードに紐付け (管理者があらかじめシフト等を作成していた場合)
+      const { error } = await supabaseAdmin
+        .from("employees")
+        .update({
+          user_id: userId,
+          full_name: fullName,
+          ...(department ? { department } : {}),
+        })
+        .eq("id", existingEmployee.id);
+        
+      if (error) {
+        throw new Error(`社員情報の紐付けに失敗しました: ${error.message}`);
+      }
+    } else {
+      // 新規作成
+      const employeeCode = inputEmployeeCode || `EMP-${userId.slice(-6).toUpperCase()}`;
 
-    if (error) {
-      throw new Error(`社員情報の登録に失敗しました: ${error.message}`);
+      const { error } = await supabaseAdmin.from("employees").insert({
+        user_id: userId,
+        employee_code: employeeCode,
+        full_name: fullName,
+        department: department,
+        weekly_legal_hours: weeklyLegalHours,
+      });
+
+      if (error) {
+        throw new Error(`社員情報の登録に失敗しました: ${error.message}`);
+      }
     }
 
     revalidatePath("/attendance");
@@ -82,9 +117,23 @@ export default async function OnboardingPage() {
         <h1 className="text-2xl font-black text-gray-950 text-center">初期設定</h1>
         <p className="mt-2 text-sm text-gray-600 text-center mb-8">
           アカウントが作成されました。勤怠管理を始めるために、基本情報を入力してください。
+          管理者がすでにあなたの情報を登録している場合は、社員コードを入力して連携してください。
         </p>
 
         <form action={submitOnboarding} className="space-y-6">
+          <div className="space-y-2">
+            <label htmlFor="employeeCode" className="block text-sm font-bold text-gray-700">
+              社員コード (管理者が登録済みの場合に入力)
+            </label>
+            <input
+              type="text"
+              id="employeeCode"
+              name="employeeCode"
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-mono focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              placeholder="EMP-12345"
+            />
+          </div>
+
           <div className="space-y-2">
             <label htmlFor="fullName" className="block text-sm font-bold text-gray-700">
               氏名 <span className="text-[#e73858]">*</span>
