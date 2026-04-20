@@ -59,7 +59,7 @@ export default async function OnboardingPage() {
       { onConflict: "id" }
     );
 
-    // 連携先の社員を探す (社員コードが入力された場合)
+    // 連携先の社員を探す (社員コード または 氏名が入力された場合)
     let existingEmployee = null;
     if (inputEmployeeCode) {
       const { data } = await supabaseAdmin
@@ -73,6 +73,18 @@ export default async function OnboardingPage() {
           throw new Error("入力された社員コードは既に別のアカウントと連携されています。");
         }
         existingEmployee = data;
+      }
+    } else if (fullName) {
+      // 社員コードが入力されなかった場合、氏名で未連携の社員を探す
+      const { data } = await supabaseAdmin
+        .from("employees")
+        .select("id, user_id")
+        .eq("full_name", fullName)
+        .is("user_id", null)
+        .limit(1);
+        
+      if (data && data.length > 0) {
+        existingEmployee = data[0];
       }
     }
 
