@@ -121,19 +121,54 @@ const applyAiShiftRules = ({
   fetchedLogs: AttendanceLog[];
   employeeId: number;
 }) => {
-  const workingRows = rows.map((row) => {
+  const existingPatterns = rows
+    .filter((r) => r.dayType === "出勤" && r.plannedStart && r.plannedEnd)
+    .map((r) => ({
+      start: r.plannedStart,
+      end: r.plannedEnd,
+      breakMins: r.plannedBreakMinutes,
+    }));
+
+  const uniquePatterns: Array<{ start: string; end: string; breakMins: number }> = [];
+  const seen = new Set<string>();
+  for (const p of existingPatterns) {
+    const key = `${p.start}-${p.end}-${p.breakMins}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniquePatterns.push(p);
+    }
+  }
+
+  const defaultPatterns = [
+    { start: "08:00", end: "17:00", breakMins: 60 },
+    { start: "09:00", end: "18:00", breakMins: 60 },
+  ];
+
+  const shiftPatterns = uniquePatterns.length > 0 ? uniquePatterns : defaultPatterns;
+
+  const workingRows = rows.map((row, index) => {
     const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
     if (log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0) {
       return { ...row };
     }
 
     const isWeekend = row.weekday === "土" || row.weekday === "日";
+    
+    // 既存の入力がある場合はそれを活かす
+    const hasExistingInput = row.dayType === "出勤" && row.plannedStart && row.plannedEnd;
+    if (hasExistingInput) {
+      return { ...row };
+    }
+
+    // 未入力の平日はパターンから割り当てる
+    const pattern = shiftPatterns[index % shiftPatterns.length];
+
     return {
       ...row,
       dayType: isWeekend ? "休日" : "出勤",
-      plannedStart: isWeekend ? "" : "08:00",
-      plannedEnd: isWeekend ? "" : "17:00",
-      plannedBreakMinutes: isWeekend ? 0 : 60,
+      plannedStart: isWeekend ? "" : pattern.start,
+      plannedEnd: isWeekend ? "" : pattern.end,
+      plannedBreakMinutes: isWeekend ? 0 : pattern.breakMins,
     };
   });
 
