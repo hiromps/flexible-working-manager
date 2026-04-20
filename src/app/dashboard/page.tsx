@@ -21,6 +21,7 @@ import {
 } from "./actions";
 import { EmbeddedShiftWorkbook } from "./embedded-shift-workbook";
 import { AttendanceWorkbookImportForm } from "./import-form";
+import { CorrectionList } from "./correction-list";
 
 type Period = {
   id: number;
@@ -313,6 +314,7 @@ export default async function DashboardPage() {
     { data: shifts },
     { data: attendanceLogs },
     { data: overtimeCalculations },
+    { data: correctionRequests },
   ] = await Promise.all([
     supabaseAdmin
       .from("monthly_periods")
@@ -340,6 +342,11 @@ export default async function DashboardPage() {
       )
       .order("work_date", { ascending: false })
       .limit(200),
+    supabaseAdmin
+      .from("attendance_correction_requests")
+      .select("id, employee_id, work_date, requested_start, requested_end, requested_break_minutes, reason, status")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true }),
   ]);
 
   const period = (periods?.[0] ?? null) as Period | null;
@@ -465,7 +472,9 @@ export default async function DashboardPage() {
         />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <section className="xl:col-span-2">
+          <section className="xl:col-span-2 flex flex-col gap-6">
+            <CorrectionList requests={correctionRequests ?? []} employees={employeeRows} />
+
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                 <div>

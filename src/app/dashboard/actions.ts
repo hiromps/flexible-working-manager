@@ -672,6 +672,76 @@ export async function getAttendanceLogs(
   return data ?? [];
 }
 
+export async function approveCorrection(requestId: number) {
+  const { supabase } = await requireAdmin();
+
+  // 万が一マイグレーション未適用でエラーになる場合を考慮
+  try {
+    const { data: request, error: reqError } = await supabase
+      .from("attendance_correction_requests")
+      .select("*")
+      .eq("id", requestId)
+      .single();
+
+    if (reqError || !request) {
+      throw new Error("申請が見つかりません。");
+    }
+
+    const { data: existingLog } = await supabase
+      .from("attendance_logs")
+      .select("id")
+      .eq("employee_id", request.employee_id)
+      .eq("work_date", request.work_date)
+      .maybeSingle();
+
+    const startMins = request.requested_start ? new Date(request.requested_start).getTime() : 0;
+    const endMins = request.requested_end ? new Date(request.requested_end).getTime() : 0;
+    const breakMins = request.requested_break_minutes ?? 0;
+    const workMinutes = (startMins && endMins) ? Math.max(0, Math.floor((endMins - startMins) / 60000) - breakMins) : 0;
+
+    const payload = {
+      employee_id: request.employee_id,
+      work_date: request.work_date,
+      actual_start: request.requested_start,
+      actual_end: request.requested_end,
+      actual_break_minutes: breakMins,
+      actual_work_minutes: workMinutes,
+      source_type: "admin", // または correction
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingLog) {
+      await supabase.from("attendance_logs").update(payload).eq("id", existingLog.id);
+    } else {
+      await supabase.from("attendance_logs").insert(payload);
+    }
+
+    await supabase
+      .from("attendance_correction_requests")
+      .update({ status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", requestId);
+
+    await recalculateLatestPeriod();
+
+    revalidatePath("/dashboard");
+  } catch (e) {
+    console.error("Error approving correction", e);
+  }
+}
+
+export async function rejectCorrection(requestId: number) {
+  const { supabase } = await requireAdmin();
+  try {
+    await supabase
+      .from("attendance_correction_requests")
+      .update({ status: "rejected", updated_at: new Date().toISOString() })
+      .eq("id", requestId);
+    revalidatePath("/dashboard");
+  } catch (e) {
+    console.error("Error rejecting correction", e);
+  }
+}
+
 export async function confirmLatestPeriodShifts(): Promise<void> {
   const { supabase, userId } = await requireAdmin();
   const period = await getLatestPeriod(supabase);

@@ -331,3 +331,33 @@ export async function clockOut(employeeId: number, logId: number) {
   revalidatePath("/attendance");
   revalidatePath("/dashboard");
 }
+
+export async function submitCorrectionRequest(
+  employeeId: number,
+  workDate: string,
+  targetLogId: number | null,
+  requestedStart: string | null,
+  requestedEnd: string | null,
+  requestedBreakMinutes: number,
+  reason: string
+) {
+  const { supabase } = await requireEmployeeAccess(employeeId);
+  
+  // 既存の申請がpendingでないか確認する等も考えられるが、ここではシンプルにInsert
+  const { error } = await supabase.from("attendance_correction_requests").insert({
+    employee_id: employeeId,
+    work_date: workDate,
+    target_log_id: targetLogId,
+    requested_start: requestedStart,
+    requested_end: requestedEnd,
+    requested_break_minutes: requestedBreakMinutes,
+    reason,
+  });
+
+  // 万が一テーブルがなくてエラーになる場合（マイグレーション未適用など）のフォールバック
+  if (error) {
+    throw new Error(`修正申請の送信に失敗しました: ${error.message}`);
+  }
+
+  revalidatePath("/attendance");
+}

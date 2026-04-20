@@ -3,6 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { AttendanceClock } from "./clock";
+import { CorrectionModal } from "./correction-modal";
 
 type Employee = {
   id: number;
@@ -250,6 +251,7 @@ export default async function AttendancePage() {
                   <th className="border-b border-gray-200 px-4 py-3">休憩</th>
                   <th className="border-b border-gray-200 px-4 py-3">実労働</th>
                   <th className="border-b border-gray-200 px-4 py-3">状態</th>
+                  <th className="border-b border-gray-200 px-4 py-3 text-right">修正</th>
                 </tr>
               </thead>
               <tbody>
@@ -276,11 +278,14 @@ export default async function AttendancePage() {
                           {log.actual_end ? "完了" : log.actual_start ? "勤務中" : "未打刻"}
                         </span>
                       </td>
+                      <td className="border-b border-gray-100 px-4 py-3 text-right">
+                        <CorrectionModal employeeId={typedEmployee.id} log={log} />
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="px-4 py-6 text-center text-sm text-gray-500" colSpan={6}>
+                    <td className="px-4 py-6 text-center text-sm text-gray-500" colSpan={7}>
                       まだ打刻履歴がありません。
                     </td>
                   </tr>
