@@ -141,7 +141,7 @@ export default async function OnboardingPage() {
               type="text"
               id="employeeCode"
               name="employeeCode"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-mono focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 font-mono focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
               placeholder="EMP-12345"
             />
           </div>
@@ -156,7 +156,7 @@ export default async function OnboardingPage() {
               name="fullName"
               defaultValue={initialName}
               required
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
               placeholder="山田 太郎"
             />
           </div>
@@ -169,7 +169,7 @@ export default async function OnboardingPage() {
               type="text"
               id="department"
               name="department"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
               placeholder="営業部"
             />
           </div>
@@ -182,7 +182,7 @@ export default async function OnboardingPage() {
               id="weeklyLegalHours"
               name="weeklyLegalHours"
               defaultValue={40}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
             >
               <option value={40}>40時間 (通常)</option>
               <option value={44}>44時間 (特例措置対象事業場)</option>
