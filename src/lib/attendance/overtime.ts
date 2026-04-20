@@ -59,6 +59,11 @@ export const calculateOvertime = ({
   }
 
   for (const weekRows of weekGroups.values()) {
+    if (weekRows.length < 7) {
+      // 端数となる期間については第2段階(週単位)の計算は行わず、第3段階(対象期間全体)の対象とする
+      continue;
+    }
+
     const actualWeekMinutes = weekRows.reduce((total, row) => total + row.actualWorkMinutes, 0);
     const plannedWeekMinutes = weekRows.reduce((total, row) => total + row.plannedWorkMinutes, 0);
     const weeklyLimit =
