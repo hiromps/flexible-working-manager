@@ -295,12 +295,11 @@ export async function clockOut(employeeId: number, logId: number) {
     throw new Error("本日はすでに退勤打刻済みです。");
   }
 
-  let finalBreakMinutes = log.actual_break_minutes ?? 0;
-
   if (log.current_break_start) {
-    const breakStartTime = new Date(log.current_break_start);
-    finalBreakMinutes += Math.max(0, Math.floor((now.getTime() - breakStartTime.getTime()) / 60_000));
+    throw new Error("休憩中には退勤できません。先に休憩を終了してください。");
   }
+
+  const finalBreakMinutes = log.actual_break_minutes ?? 0;
 
   const startTime = new Date(log.actual_start);
   const totalMinutes = Math.max(0, Math.floor((now.getTime() - startTime.getTime()) / 60_000));

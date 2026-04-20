@@ -209,11 +209,11 @@ export function AttendanceClock({ employeeId, todaysLog, todaysShift }: ClockPro
         </button>
         <button
           className={darkButton}
-          disabled={!hasClockedIn || hasClockedOut || isLoading}
+          disabled={!hasClockedIn || hasClockedOut || isOnBreak || isLoading}
           onClick={handleClockOut}
           type="button"
         >
-          {loadingAction === "clock-out" ? "退勤打刻中..." : isOnBreak ? "休憩を終了して退勤する" : "退勤する"}
+          {loadingAction === "clock-out" ? "退勤打刻中..." : "退勤する"}
         </button>
       </div>
 
