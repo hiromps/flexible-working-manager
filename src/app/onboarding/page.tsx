@@ -20,11 +20,11 @@ export default async function OnboardingPage() {
   const supabaseAdmin = getSupabaseAdmin();
 
   // すでに登録済みかどうか確認
-  const { data: employee } = await supabaseAdmin
+  const { data: employee, error } = await supabaseAdmin
     .from("employees")
     .select("id")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
 
   if (employee) {
     redirect("/attendance");
