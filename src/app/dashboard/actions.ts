@@ -605,6 +605,30 @@ export async function recalculateLatestPeriod(): Promise<void> {
   revalidatePath("/dashboard");
 }
 
+export async function getAttendanceLogs(
+  employeeId: number,
+  startDate: string,
+  endDate: string,
+) {
+  const { supabase } = await requireAdmin();
+
+  const { data, error } = await supabase
+    .from("attendance_logs")
+    .select(
+      "id, employee_id, work_date, actual_work_minutes, actual_break_minutes, actual_start, actual_end",
+    )
+    .eq("employee_id", employeeId)
+    .gte("work_date", startDate)
+    .lte("work_date", endDate)
+    .order("work_date", { ascending: true });
+
+  if (error) {
+    throw new Error(`勤怠実績の取得に失敗しました: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
 export async function confirmLatestPeriodShifts(): Promise<void> {
   const { supabase, userId } = await requireAdmin();
   const period = await getLatestPeriod(supabase);

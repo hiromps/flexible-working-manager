@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Bot, Save, WandSparkles } from "lucide-react";
+import { calculateLegalTotalMinutes, calculateOvertime } from "@/lib/attendance/overtime";
 import {
+  getAttendanceLogs,
   saveEmbeddedShiftWorkbook,
   type DashboardActionState,
 } from "./actions";
@@ -13,6 +15,16 @@ type EmployeeOption = {
   full_name: string;
   department: string | null;
   weekly_legal_hours: number;
+};
+
+type AttendanceLog = {
+  id: number;
+  employee_id: number;
+  work_date: string;
+  actual_work_minutes: number;
+  actual_break_minutes: number;
+  actual_start: string | null;
+  actual_end: string | null;
 };
 
 type ShiftWorkbookRow = {
@@ -54,6 +66,15 @@ const workMinutes = (row: ShiftWorkbookRow) => {
 
 const hours = (minutes: number) => Math.round((minutes / 60) * 10) / 10;
 
+const formatTime = (isoString: string | null) => {
+  if (!isoString) return "未打刻";
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(isoString));
+};
+
 const getPeriodDates = (year: number, month: number, closingRule: string) => {
   if (closingRule === "20日締") {
     return {
@@ -92,11 +113,20 @@ const generateBlankRows = (year: number, month: number, closingRule: string) => 
 const applyAiShiftRules = ({
   rows,
   weeklyLegalHours,
+  fetchedLogs,
+  employeeId,
 }: {
   rows: ShiftWorkbookRow[];
   weeklyLegalHours: number;
+  fetchedLogs: AttendanceLog[];
+  employeeId: number;
 }) => {
   const workingRows = rows.map((row) => {
+    const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+    if (log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0) {
+      return { ...row };
+    }
+
     const isWeekend = row.weekday === "土" || row.weekday === "日";
     return {
       ...row,
@@ -112,41 +142,99 @@ const applyAiShiftRules = ({
 
   for (let weekStart = 0; weekStart < workingRows.length; weekStart += 7) {
     const weekRows = workingRows.slice(weekStart, weekStart + 7);
-    let weekTotal = weekRows.reduce((total, row) => total + workMinutes(row), 0);
+    let weekTotal = weekRows.reduce((total, row) => {
+      const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+      const actual = log?.actual_work_minutes ?? 0;
+      return total + (actual > 0 ? actual : workMinutes(row));
+    }, 0);
 
     for (let index = weekRows.length - 1; index >= 0 && weekTotal > weeklyLegalMinutes; index -= 1) {
-      const row = weekRows[index];
-      if (row.dayType !== "出勤") continue;
-
       const globalIndex = weekStart + index;
-      weekTotal -= workMinutes(workingRows[globalIndex]);
-      workingRows[globalIndex] = {
-        ...workingRows[globalIndex],
+      const row = workingRows[globalIndex];
+      const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+      
+      // 打刻済みの日は変更しない（触らない）
+      if (row.dayType !== "出勤" || (log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0)) continue;
+
+      const overMinutes = weekTotal - weeklyLegalMinutes;
+      const currentWorkMinutes = workMinutes(row);
+
+      if (currentWorkMinutes <= overMinutes) {
+        weekTotal -= currentWorkMinutes;
+        workingRows[globalIndex] = {
+          ...row,
+          dayType: "休日",
+          plannedStart: "",
+          plannedEnd: "",
+          plannedBreakMinutes: 0,
+        };
+      } else {
+        const newWorkMinutes = currentWorkMinutes - overMinutes;
+        weekTotal -= overMinutes;
+        
+        const startMins = parseTime(row.plannedStart) ?? 480; // default 08:00
+        const newEndMins = startMins + newWorkMinutes + row.plannedBreakMinutes;
+        const endH = Math.floor(newEndMins / 60) % 24;
+        const endM = newEndMins % 60;
+        
+        workingRows[globalIndex] = {
+          ...row,
+          plannedEnd: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
+        };
+      }
+    }
+  }
+
+  let total = workingRows.reduce((sum, row) => {
+    const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+    const actual = log?.actual_work_minutes ?? 0;
+    return sum + (actual > 0 ? actual : workMinutes(row));
+  }, 0);
+
+  for (let index = workingRows.length - 1; index >= 0 && total > legalTotalMinutes; index -= 1) {
+    const row = workingRows[index];
+    const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+    
+    if (row.dayType !== "出勤" || (log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0)) continue;
+
+    const overMinutes = total - legalTotalMinutes;
+    const currentWorkMinutes = workMinutes(row);
+
+    if (currentWorkMinutes <= overMinutes) {
+      total -= currentWorkMinutes;
+      workingRows[index] = {
+        ...row,
         dayType: "休日",
         plannedStart: "",
         plannedEnd: "",
         plannedBreakMinutes: 0,
       };
+    } else {
+      const newWorkMinutes = currentWorkMinutes - overMinutes;
+      total -= overMinutes;
+      
+      const startMins = parseTime(row.plannedStart) ?? 480;
+      const newEndMins = startMins + newWorkMinutes + row.plannedBreakMinutes;
+      const endH = Math.floor(newEndMins / 60) % 24;
+      const endM = newEndMins % 60;
+      
+      workingRows[index] = {
+        ...row,
+        plannedEnd: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
+      };
     }
-  }
-
-  let total = workingRows.reduce((sum, row) => sum + workMinutes(row), 0);
-  for (let index = workingRows.length - 1; index >= 0 && total > legalTotalMinutes; index -= 1) {
-    if (workingRows[index].dayType !== "出勤") continue;
-    total -= workMinutes(workingRows[index]);
-    workingRows[index] = {
-      ...workingRows[index],
-      dayType: "休日",
-      plannedStart: "",
-      plannedEnd: "",
-      plannedBreakMinutes: 0,
-    };
   }
 
   return workingRows;
 };
 
-export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption[] }) {
+export function EmbeddedShiftWorkbook({
+  employees,
+  attendanceLogs,
+}: {
+  employees: EmployeeOption[];
+  attendanceLogs: AttendanceLog[];
+}) {
   const now = new Date();
   const [state, formAction, pending] = useActionState(
     saveEmbeddedShiftWorkbook,
@@ -164,12 +252,78 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
   const [rows, setRows] = useState<ShiftWorkbookRow[]>(() =>
     generateBlankRows(now.getFullYear(), now.getMonth() + 1, "末日締"),
   );
+  const [fetchedLogs, setFetchedLogs] = useState<AttendanceLog[]>(attendanceLogs);
 
-  const legalTotalMinutes = Math.round((weeklyLegalHours * 60 * rows.length) / 7);
-  const plannedTotalMinutes = rows.reduce((sum, row) => sum + workMinutes(row), 0);
+  useEffect(() => {
+    if (employeeId === 0) {
+      setFetchedLogs([]);
+      return;
+    }
+
+    const { start, end } = getPeriodDates(year, month, closingRule);
+    const startDateText = toYmd(start);
+    const endDateText = toYmd(end);
+
+    getAttendanceLogs(employeeId, startDateText, endDateText)
+      .then((logs) => setFetchedLogs(logs as AttendanceLog[]))
+      .catch(console.error);
+  }, [employeeId, year, month, closingRule]);
+
+  const startDateText = useMemo(() => {
+    const { start } = getPeriodDates(year, month, closingRule);
+    return toYmd(start);
+  }, [year, month, closingRule]);
+
+  const calendarDays = rows.length;
+  const legalTotalMinutes = useMemo(
+    () => calculateLegalTotalMinutes(weeklyLegalHours, calendarDays),
+    [weeklyLegalHours, calendarDays]
+  );
+
+  const overtimeResults = useMemo(() => {
+    if (employeeId === 0 || rows.length === 0) return [];
+    const inputs = rows.map((row) => {
+      const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+      const planned = workMinutes(row);
+      const actual = log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0
+        ? log.actual_work_minutes
+        : planned;
+      return {
+        employeeId,
+        workDate: row.workDate,
+        plannedWorkMinutes: planned,
+        actualWorkMinutes: actual,
+      };
+    });
+
+    return calculateOvertime({
+      rows: inputs,
+      periodStart: startDateText,
+      legalTotalMinutes,
+      weeklyLegalMinutes: weeklyLegalHours * 60,
+    });
+  }, [rows, fetchedLogs, employeeId, startDateText, legalTotalMinutes, weeklyLegalHours]);
+
+  const effectiveTotalMinutes = useMemo(() => {
+    return rows.reduce((sum, row) => {
+      const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+      const planned = workMinutes(row);
+      const actual = log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0
+        ? log.actual_work_minutes
+        : planned;
+      return sum + actual;
+    }, 0);
+  }, [rows, fetchedLogs, employeeId]);
+
+  const totalOverMinutes = useMemo(() => {
+    return overtimeResults.reduce(
+      (sum, r) => sum + r.dailyOtMinutes + r.weeklyOtMinutes + r.periodOtMinutes,
+      0
+    );
+  }, [overtimeResults]);
+
   const workdayCount = rows.filter((row) => row.dayType === "出勤").length;
   const holidayCount = rows.filter((row) => row.dayType === "休日").length;
-  const overMinutes = Math.max(0, plannedTotalMinutes - legalTotalMinutes);
   const rowsJson = useMemo(() => JSON.stringify(rows), [rows]);
 
   const resetPeriodRows = (nextYear: number, nextMonth: number, nextClosingRule: string) => {
@@ -211,7 +365,7 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
         </div>
         <button
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0457a7] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#005a96]"
-          onClick={() => setRows(applyAiShiftRules({ rows, weeklyLegalHours }))}
+          onClick={() => setRows(applyAiShiftRules({ rows, weeklyLegalHours, fetchedLogs, employeeId }))}
           type="button"
         >
           <WandSparkles className="h-4 w-4" />
@@ -350,12 +504,12 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
             <p className="mt-1 text-lg font-bold text-gray-900">{holidayCount}日</p>
           </div>
           <div>
-            <p className="font-bold text-gray-500">シフト時間</p>
-            <p className="mt-1 text-lg font-bold text-gray-900">{hours(plannedTotalMinutes)}時間</p>
+            <p className="font-bold text-gray-500">総労働時間 (実績込み)</p>
+            <p className="mt-1 text-lg font-bold text-gray-900">{hours(effectiveTotalMinutes)}時間</p>
           </div>
           <div>
             <p className="font-bold text-gray-500">法定総枠</p>
-            <p className={`mt-1 text-lg font-bold ${overMinutes > 0 ? "text-[#e73858]" : "text-[#047857]"}`}>
+            <p className={`mt-1 text-lg font-bold ${totalOverMinutes > 0 ? "text-[#e73858]" : "text-[#047857]"}`}>
               {hours(legalTotalMinutes)}時間
             </p>
           </div>
@@ -380,8 +534,14 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
             <tbody>
               {rows.map((row, index) => {
                 const rowWorkMinutes = workMinutes(row);
-                const dailyOverMinutes = Math.max(0, rowWorkMinutes - Math.max(480, rowWorkMinutes));
                 const isHoliday = row.dayType !== "出勤";
+                const log = fetchedLogs.find(
+                  (l) => l.employee_id === employeeId && l.work_date === row.workDate
+                );
+                const otResult = overtimeResults.find((r) => r.workDate === row.workDate);
+                const combinedOverMinutes = otResult 
+                  ? otResult.dailyOtMinutes + otResult.weeklyOtMinutes + otResult.periodOtMinutes 
+                  : 0;
 
                 return (
                   <tr className={isHoliday ? "bg-gray-50" : "bg-white"} key={row.workDate}>
@@ -400,11 +560,11 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
                         ))}
                       </select>
                     </td>
-                    <td className="border border-gray-200 px-2 py-1 text-xs font-bold text-gray-400">
-                      社員打刻で反映
+                    <td className="border border-gray-200 px-2 py-1 text-xs font-bold text-gray-600">
+                      {log?.actual_start ? formatTime(log.actual_start) : "未打刻"}
                     </td>
-                    <td className="border border-gray-200 px-2 py-1 text-xs font-bold text-gray-400">
-                      社員打刻で反映
+                    <td className="border border-gray-200 px-2 py-1 text-xs font-bold text-gray-600">
+                      {log?.actual_end ? formatTime(log.actual_end) : "未打刻"}
                     </td>
                     <td className="border border-gray-200 px-2 py-1">
                       <input
@@ -440,7 +600,7 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
                       {hours(rowWorkMinutes)}
                     </td>
                     <td className="border border-gray-200 px-2 py-1 text-right font-mono text-gray-400">
-                      {hours(dailyOverMinutes)}
+                      {combinedOverMinutes > 0 ? hours(combinedOverMinutes) : ""}
                     </td>
                   </tr>
                 );
@@ -451,12 +611,12 @@ export function EmbeddedShiftWorkbook({ employees }: { employees: EmployeeOption
 
         <div className="flex flex-col justify-between gap-3 border-t border-gray-100 p-5 sm:flex-row sm:items-center">
           <div className="text-xs text-gray-500">
-            {overMinutes > 0 ? (
+            {totalOverMinutes > 0 ? (
               <span className="font-bold text-[#e73858]">
-                法定総枠を{hours(overMinutes)}時間超過しています。
+                実績込みで法定枠（週単位・総枠）を {hours(totalOverMinutes)}時間 超過しています。未打刻のシフトを調整してください。
               </span>
             ) : (
-              <span className="font-bold text-[#047857]">法定総枠内に収まっています。</span>
+              <span className="font-bold text-[#047857]">実績込みでも法定枠内に収まっています。</span>
             )}
           </div>
           <button

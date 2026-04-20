@@ -459,7 +459,10 @@ export default async function DashboardPage() {
           />
         </section>
 
-        <EmbeddedShiftWorkbook employees={employeeRows} />
+        <EmbeddedShiftWorkbook
+          attendanceLogs={attendanceRows}
+          employees={employeeRows}
+        />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <section className="xl:col-span-2">
