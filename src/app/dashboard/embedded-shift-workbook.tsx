@@ -142,6 +142,10 @@ const applyAiShiftRules = ({
 
   for (let weekStart = 0; weekStart < workingRows.length; weekStart += 7) {
     const weekRows = workingRows.slice(weekStart, weekStart + 7);
+    if (weekRows.length < 7) {
+      continue;
+    }
+
     let weekTotal = weekRows.reduce((total, row) => {
       const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
       const actual = log?.actual_work_minutes ?? 0;
