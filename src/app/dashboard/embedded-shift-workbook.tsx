@@ -515,26 +515,26 @@ export function EmbeddedShiftWorkbook({
               ))}
             </select>
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-2 sm:col-span-2 lg:col-span-3">
+          <label className="flex flex-col gap-1 text-xs font-bold text-gray-600 col-span-12 sm:col-span-4 lg:col-span-3">
             社員ID
             <input
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               onChange={(event) => setEmployeeCode(event.target.value)}
               value={employeeCode}
             />
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-2 sm:col-span-2 lg:col-span-5">
+          <label className="flex flex-col gap-1 text-xs font-bold text-gray-600 col-span-12 sm:col-span-8 lg:col-span-5">
             氏名
             <input
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               onChange={(event) => setFullName(event.target.value)}
               value={fullName}
             />
           </label>
-          <label className="grid gap-1 text-xs font-bold text-gray-600 col-span-2 sm:col-span-4 lg:col-span-4">
+          <label className="flex flex-col gap-1 text-xs font-bold text-gray-600 col-span-12 sm:col-span-12 lg:col-span-4">
             所属
             <input
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               onChange={(event) => setDepartment(event.target.value)}
               value={department}
             />
@@ -542,33 +542,33 @@ export function EmbeddedShiftWorkbook({
 
           <div className="col-span-12 border-t border-gray-100 my-2"></div>
           
-          <div className="col-span-2 sm:col-span-4 lg:col-span-12 flex flex-col gap-1 sm:flex-row sm:items-center justify-between">
+          <div className="col-span-12 flex flex-col gap-1 sm:flex-row sm:items-center justify-between">
             <h4 className="text-sm font-bold text-gray-700">AIシフト自動生成・基本設定</h4>
             <span className="text-xs text-gray-500">※未入力の平日や、区分の切り替え時にこの時間がセットされます</span>
           </div>
 
-          <label className="grid gap-1 text-xs font-bold text-[#0457a7] col-span-2 sm:col-span-2 lg:col-span-4">
+          <label className="flex flex-col gap-1 text-xs font-bold text-[#0457a7] col-span-6 sm:col-span-4 lg:col-span-4">
             シフト開始時間 (基本)
             <input
-              className="rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
               onChange={(event) => setDefaultStartTime(event.target.value)}
               type="time"
               value={defaultStartTime}
             />
           </label>
-          <label className="grid gap-1 text-xs font-bold text-[#0457a7] col-span-2 sm:col-span-2 lg:col-span-4">
+          <label className="flex flex-col gap-1 text-xs font-bold text-[#0457a7] col-span-6 sm:col-span-4 lg:col-span-4">
             シフト終了時間 (基本)
             <input
-              className="rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
               onChange={(event) => setDefaultEndTime(event.target.value)}
               type="time"
               value={defaultEndTime}
             />
           </label>
-          <label className="grid gap-1 text-xs font-bold text-[#0457a7] col-span-2 sm:col-span-4 lg:col-span-4">
+          <label className="flex flex-col gap-1 text-xs font-bold text-[#0457a7] col-span-12 sm:col-span-4 lg:col-span-4">
             休憩時間 (分)
             <input
-              className="rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
+              className="w-full rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
               onChange={(event) => setDefaultBreakMinutes(Number(event.target.value))}
               type="number"
               min={0}
