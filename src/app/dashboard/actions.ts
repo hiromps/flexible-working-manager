@@ -378,7 +378,7 @@ export async function saveEmbeddedShiftWorkbook(
           is_variable_monthly: true,
         })
         .eq("id", employeeIdValue)
-        .select("id, weekly_legal_hours, is_under_18, has_pregnancy_restriction, needs_care_consideration, care_notes")
+        .select("id, weekly_legal_hours")
         .single();
 
       if (error || !data) {
@@ -399,7 +399,7 @@ export async function saveEmbeddedShiftWorkbook(
           },
           { onConflict: "employee_code" },
         )
-        .select("id, weekly_legal_hours, is_under_18, has_pregnancy_restriction, needs_care_consideration, care_notes")
+        .select("id, weekly_legal_hours")
         .single();
 
       if (error || !data) {
@@ -412,12 +412,28 @@ export async function saveEmbeddedShiftWorkbook(
 
     // --- Compliance Check ---
     const { checkCompliance } = await import("@/lib/attendance/compliance");
-    const complianceInfo = {
-      is_under_18: !!savedEmployee.is_under_18,
-      has_pregnancy_restriction: !!savedEmployee.has_pregnancy_restriction,
-      needs_care_consideration: !!savedEmployee.needs_care_consideration,
-      care_notes: savedEmployee.care_notes,
+    let complianceInfo = {
+      is_under_18: false,
+      has_pregnancy_restriction: false,
+      needs_care_consideration: false,
+      care_notes: null as string | null,
     };
+    
+    const { data: compData, error: compError } = await supabase
+      .from("employees")
+      .select("is_under_18, has_pregnancy_restriction, needs_care_consideration, care_notes")
+      .eq("id", savedEmployee.id)
+      .single();
+      
+    if (!compError && compData) {
+      complianceInfo = {
+        is_under_18: !!compData.is_under_18,
+        has_pregnancy_restriction: !!compData.has_pregnancy_restriction,
+        needs_care_consideration: !!compData.needs_care_consideration,
+        care_notes: compData.care_notes,
+      };
+    }
+
     const warnings = checkCompliance(complianceInfo, parsedRows);
     const errors = warnings.filter(w => w.level === "error");
     
