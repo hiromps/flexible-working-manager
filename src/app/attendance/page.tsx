@@ -93,53 +93,9 @@ export default async function AttendancePage() {
     .eq("user_id", userId)
     .single();
 
-  if (!employee && user) {
-    await supabaseAdmin.from("profiles").upsert(
-      {
-        id: userId,
-        email: user.primaryEmailAddress?.emailAddress ?? "",
-        role: "employee",
-      },
-      { onConflict: "id" },
-    );
-
-    const fullName =
-      user.fullName ?? user.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "未設定";
-    const employeeCode = `EMP-${userId.slice(-6).toUpperCase()}`;
-
-    const { data: newEmployee, error: createError } = await supabaseAdmin
-      .from("employees")
-      .insert({
-        user_id: userId,
-        employee_code: employeeCode,
-        full_name: fullName,
-      })
-      .select("id, full_name, employee_code, department")
-      .single();
-
-    if (createError) {
-      return (
-        <main className="min-h-screen bg-[#f8fafc] p-6">
-          <section className="mx-auto max-w-xl rounded-lg border border-[#e73858]/30 bg-white p-6 text-center shadow-sm">
-            <h1 className="text-lg font-bold text-[#e73858]">社員情報の作成に失敗しました</h1>
-            <p className="mt-2 text-sm text-gray-600">{createError.message}</p>
-          </section>
-        </main>
-      );
-    }
-
-    employee = newEmployee;
-  }
-
   if (!employee) {
-    return (
-      <main className="min-h-screen bg-[#f8fafc] p-6">
-        <section className="mx-auto max-w-xl rounded-lg border border-[#e73858]/30 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-bold text-[#e73858]">社員情報が見つかりません</h1>
-          <p className="mt-2 text-sm text-gray-600">管理者へ連絡してください。</p>
-        </section>
-      </main>
-    );
+    // 社員情報（基本情報）が未登録の場合は、オンボーディング画面へリダイレクト
+    redirect("/onboarding");
   }
 
   const typedEmployee = employee as Employee;

@@ -79,21 +79,7 @@ export async function POST(req: Request) {
       return new Response('Error creating profile', { status: 500 })
     }
 
-    // 2. Employee の作成
-    const { error: employeeError } = await supabaseAdmin
-      .from('employees')
-      .insert({
-        user_id: id,
-        employee_code: employeeCode,
-        full_name: fullName,
-      })
-
-    if (employeeError) {
-      console.error('Error inserting employee:', employeeError)
-      return new Response('Error creating employee', { status: 500 })
-    }
-
-    console.log(`Successfully created employee record for user ${id}`)
+    console.log(`Successfully created profile for user ${id}`)
   }
 
   return new Response('Webhook processed successfully', { status: 200 })
