@@ -115,11 +115,17 @@ const applyAiShiftRules = ({
   weeklyLegalHours,
   fetchedLogs,
   employeeId,
+  defaultStartTime,
+  defaultEndTime,
+  defaultBreakMinutes,
 }: {
   rows: ShiftWorkbookRow[];
   weeklyLegalHours: number;
   fetchedLogs: AttendanceLog[];
   employeeId: number;
+  defaultStartTime: string;
+  defaultEndTime: string;
+  defaultBreakMinutes: number;
 }) => {
   const existingPatterns = rows
     .filter((r) => r.dayType === "出勤" && r.plannedStart && r.plannedEnd)
@@ -140,8 +146,7 @@ const applyAiShiftRules = ({
   }
 
   const defaultPatterns = [
-    { start: "08:00", end: "17:00", breakMins: 60 },
-    { start: "09:00", end: "18:00", breakMins: 60 },
+    { start: defaultStartTime, end: defaultEndTime, breakMins: defaultBreakMinutes },
   ];
 
   const shiftPatterns = uniquePatterns.length > 0 ? uniquePatterns : defaultPatterns;
@@ -284,6 +289,9 @@ export function EmbeddedShiftWorkbook({
   const [closingRule, setClosingRule] = useState("末日締");
   const [weeklyLegalHours, setWeeklyLegalHours] = useState(40);
   const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? 0);
+  const [defaultStartTime, setDefaultStartTime] = useState("08:00");
+  const [defaultEndTime, setDefaultEndTime] = useState("17:00");
+  const [defaultBreakMinutes, setDefaultBreakMinutes] = useState(60);
   const selectedEmployee = employees.find((employee) => employee.id === employeeId);
   const [employeeCode, setEmployeeCode] = useState(selectedEmployee?.employee_code ?? "");
   const [fullName, setFullName] = useState(selectedEmployee?.full_name ?? "");
@@ -380,9 +388,9 @@ export function EmbeddedShiftWorkbook({
           next.plannedBreakMinutes = 0;
         }
         if (patch.dayType === "出勤" && !row.plannedStart && !row.plannedEnd) {
-          next.plannedStart = "08:00";
-          next.plannedEnd = "17:00";
-          next.plannedBreakMinutes = 60;
+          next.plannedStart = defaultStartTime;
+          next.plannedEnd = defaultEndTime;
+          next.plannedBreakMinutes = defaultBreakMinutes;
         }
         return next;
       }),
@@ -404,7 +412,7 @@ export function EmbeddedShiftWorkbook({
         </div>
         <button
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0457a7] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#005a96]"
-          onClick={() => setRows(applyAiShiftRules({ rows, weeklyLegalHours, fetchedLogs, employeeId }))}
+          onClick={() => setRows(applyAiShiftRules({ rows, weeklyLegalHours, fetchedLogs, employeeId, defaultStartTime, defaultEndTime, defaultBreakMinutes }))}
           type="button"
         >
           <WandSparkles className="h-4 w-4" />
