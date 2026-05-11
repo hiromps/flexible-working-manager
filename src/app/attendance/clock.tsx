@@ -56,13 +56,15 @@ const getErrorMessage = (error: unknown) =>
 
 export function AttendanceClock({ employeeId, todaysLog, todaysShift }: ClockProps) {
   const router = useRouter();
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date>(() => new Date());
+  const [mounted, setMounted] = useState(false);
   const [loadingAction, setLoadingAction] = useState<
     "clock-in" | "clock-out" | "break-start" | "break-end" | null
   >(null);
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
+    setMounted(true);
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -153,8 +155,8 @@ export function AttendanceClock({ employeeId, todaysLog, todaysShift }: ClockPro
       <div className="flex flex-col gap-4 border-b border-gray-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-bold text-gray-500">現在時刻</p>
-          <div className="mt-2 font-mono text-5xl font-black text-gray-950 tabular-nums">
-            {timeFormatter.format(time)}
+          <div className="mt-2 font-mono text-5xl font-black text-gray-950 tabular-nums" suppressHydrationWarning>
+            {mounted ? timeFormatter.format(time) : "--:--:--"}
           </div>
         </div>
         <span className={`w-fit rounded-lg border px-3 py-2 text-sm font-bold ${status.className}`}>

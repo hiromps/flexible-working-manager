@@ -22,12 +22,14 @@ export function CorrectionModal({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const formatTime = (isoString: string | null) => {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    const h = String(date.getHours()).padStart(2, "0");
-    const m = String(date.getMinutes()).padStart(2, "0");
-    return `${h}:${m}`;
+  const formatTime = (iso: string | null) => {
+    if (!iso) return "";
+    return new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(iso));
   };
 
   const [startTime, setStartTime] = useState(formatTime(log.actual_start));
@@ -66,8 +68,8 @@ export function CorrectionModal({
       
       alert("修正申請を送信しました。管理者の承認をお待ちください。");
       setIsOpen(false);
-    } catch (err: any) {
-      setErrorMsg(err.message || "エラーが発生しました");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
       setLoading(false);
     }

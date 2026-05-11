@@ -119,9 +119,9 @@ export async function submitOnboarding(
     }
 
     revalidatePath("/attendance");
-  } catch (err: any) {
+  } catch (err) {
     console.error("onboarding unexpected error:", err);
-    return { status: "error", message: err.message || "予期せぬエラーが発生しました" };
+    return { status: "error", message: err instanceof Error ? err.message : "予期せぬエラーが発生しました" };
   }
 
   redirect("/attendance");

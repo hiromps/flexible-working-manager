@@ -303,7 +303,7 @@ export function EmbeddedShiftWorkbook({
 
   useEffect(() => {
     if (employeeId === 0) {
-      setFetchedLogs([]);
+      Promise.resolve().then(() => setFetchedLogs([]));
       return;
     }
 

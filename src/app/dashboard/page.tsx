@@ -9,6 +9,7 @@ import {
   RefreshCw,
   ShieldAlert,
   Users,
+  Archive,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -18,10 +19,12 @@ import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import {
   confirmLatestPeriodShifts,
   recalculateLatestPeriod,
+  closeLatestPeriod,
 } from "./actions";
 import { EmbeddedShiftWorkbook } from "./embedded-shift-workbook";
-import { AttendanceWorkbookImportForm } from "./import-form";
 import { CorrectionList } from "./correction-list";
+import { EmployeeComplianceForm } from "./employee-compliance-form";
+import { PeriodSelector } from "./period-selector";
 
 type Period = {
   id: number;
@@ -40,6 +43,10 @@ type Employee = {
   department: string | null;
   weekly_legal_hours: number;
   is_variable_monthly: boolean;
+  is_under_18: boolean;
+  has_pregnancy_restriction: boolean;
+  needs_care_consideration: boolean;
+  care_notes: string | null;
 };
 
 type ShiftPlan = {
@@ -258,7 +265,12 @@ function EmptyState() {
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodId?: string }>;
+}) {
+  const { periodId } = await searchParams;
   const { userId } = await auth();
   const user = await currentUser();
 
@@ -271,70 +283,78 @@ export default async function DashboardPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  let { data: profile } = await supabaseAdmin
+  const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("role")
     .eq("id", userId)
     .single();
 
-  if (!profile || profile.role !== "admin") {
-    await supabaseAdmin.from("profiles").upsert(
-      {
-        id: userId,
-        email: user.primaryEmailAddress?.emailAddress || "",
-        role: "admin",
-      },
-      { onConflict: "id" },
-    );
-
-    const { data: employee } = await supabaseAdmin
-      .from("employees")
-      .select("id")
-      .eq("user_id", userId)
-      .single();
-
-    if (!employee) {
-      const fullName =
-        user.fullName || user.primaryEmailAddress?.emailAddress?.split("@")[0] || "未設定";
-      const employeeCode = `EMP-${userId.slice(-6).toUpperCase()}`;
-
-      await supabaseAdmin.from("employees").insert({
-        user_id: userId,
-        employee_code: employeeCode,
-        full_name: fullName,
-      });
-    }
-
-    profile = { role: "admin" };
+  if (!profile || !["admin", "manager"].includes(profile.role)) {
+    redirect("/attendance");
   }
 
+  // Fetch all periods for the selector (newest first)
+  const { data: allPeriods } = await supabaseAdmin
+    .from("monthly_periods")
+    .select("id, label, status")
+    .order("start_date", { ascending: false });
+
+  const periodList = (allPeriods ?? []) as { id: number; label: string; status: string }[];
+
+  // Determine selected period
+  const requestedPeriodId = periodId ? Number(periodId) : null;
+  const selectedPeriodEntry =
+    requestedPeriodId && periodList.some((p) => p.id === requestedPeriodId)
+      ? periodList.find((p) => p.id === requestedPeriodId)!
+      : periodList[0] ?? null;
+  const selectedPeriodId = selectedPeriodEntry?.id ?? null;
+
+  // Fetch the period detail and employees in parallel first (we need period dates for attendance query)
+  const [{ data: periodDetail }, { data: employees }] = await Promise.all([
+    selectedPeriodId
+      ? supabaseAdmin
+          .from("monthly_periods")
+          .select("id, label, start_date, end_date, base_date, legal_total_minutes, status")
+          .eq("id", selectedPeriodId)
+          .single()
+      : Promise.resolve({ data: null }),
+    supabaseAdmin
+      .from("employees")
+      .select(
+        "id, employee_code, full_name, department, weekly_legal_hours, is_variable_monthly, is_under_18, has_pregnancy_restriction, needs_care_consideration, care_notes",
+      )
+      .order("employee_code", { ascending: true }),
+  ]);
+
+  const periodStartDate = (periodDetail as Period | null)?.start_date ?? "1970-01-01";
+  const periodEndDate = (periodDetail as Period | null)?.end_date ?? "9999-12-31";
+
+  // Now fetch period-scoped data using the resolved dates
   const [
-    { data: periods },
-    { data: employees },
     { data: shifts },
     { data: attendanceLogs },
     { data: overtimeCalculations },
     { data: correctionRequests },
   ] = await Promise.all([
-    supabaseAdmin
-      .from("monthly_periods")
-      .select("id, label, start_date, end_date, base_date, legal_total_minutes, status")
-      .order("start_date", { ascending: false })
-      .limit(1),
-    supabaseAdmin
-      .from("employees")
-      .select("id, employee_code, full_name, department, weekly_legal_hours, is_variable_monthly")
-      .order("employee_code", { ascending: true }),
-    supabaseAdmin
-      .from("shift_plans")
-      .select(
-        "id, employee_id, monthly_period_id, work_date, planned_work_minutes, planned_break_minutes, status",
-      ),
-    supabaseAdmin
-      .from("attendance_logs")
-      .select("id, employee_id, work_date, actual_work_minutes, actual_break_minutes, actual_start, actual_end")
-      .order("work_date", { ascending: false })
-      .limit(200),
+    selectedPeriodId
+      ? supabaseAdmin
+          .from("shift_plans")
+          .select(
+            "id, employee_id, monthly_period_id, work_date, planned_work_minutes, planned_break_minutes, status",
+          )
+          .eq("monthly_period_id", selectedPeriodId)
+      : Promise.resolve({ data: [] }),
+    selectedPeriodId
+      ? supabaseAdmin
+          .from("attendance_logs")
+          .select(
+            "id, employee_id, work_date, actual_work_minutes, actual_break_minutes, actual_start, actual_end",
+          )
+          .gte("work_date", periodStartDate)
+          .lte("work_date", periodEndDate)
+          .order("work_date", { ascending: false })
+          .limit(200)
+      : Promise.resolve({ data: [] }),
     supabaseAdmin
       .from("overtime_calculations")
       .select(
@@ -344,19 +364,20 @@ export default async function DashboardPage() {
       .limit(200),
     supabaseAdmin
       .from("attendance_correction_requests")
-      .select("id, employee_id, work_date, requested_start, requested_end, requested_break_minutes, reason, status")
+      .select(
+        "id, employee_id, work_date, requested_start, requested_end, requested_break_minutes, reason, status",
+      )
       .eq("status", "pending")
       .order("created_at", { ascending: true }),
   ]);
 
-  const period = (periods?.[0] ?? null) as Period | null;
+  const period = (periodDetail ?? null) as Period | null;
   const employeeRows = (employees ?? []) as Employee[];
   const shiftRows = (shifts ?? []) as ShiftPlan[];
   const attendanceRows = (attendanceLogs ?? []) as AttendanceLog[];
   const overtimeRows = (overtimeCalculations ?? []) as OvertimeCalculation[];
-  const periodShifts = period
-    ? shiftRows.filter((item) => item.monthly_period_id === period.id)
-    : shiftRows;
+
+  const periodShifts = shiftRows;
   const plannedMinutes = periodShifts.reduce(
     (total, item) => total + item.planned_work_minutes,
     0,
@@ -364,7 +385,9 @@ export default async function DashboardPage() {
   const unconfirmedShifts = periodShifts.filter((item) => item.status !== "confirmed");
   const legalFrameMinutes = period?.legal_total_minutes ?? 0;
   const legalFrameUsage =
-    legalFrameMinutes > 0 ? Math.min(100, Math.round((plannedMinutes / legalFrameMinutes) * 100)) : 0;
+    legalFrameMinutes > 0
+      ? Math.min(100, Math.round((plannedMinutes / legalFrameMinutes) * 100))
+      : 0;
   const totalOvertimeMinutes = overtimeRows.reduce(
     (total, item) =>
       total + item.daily_ot_minutes + item.weekly_ot_minutes + item.period_ot_minutes,
@@ -380,6 +403,8 @@ export default async function DashboardPage() {
   const periodDays = getPeriodDays(period);
   const payrollReady =
     periodShifts.length > 0 && unconfirmedShifts.length === 0 && warningItems.length === 0;
+
+  const canClosePeriod = period?.status === "confirmed";
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f8fafc] text-gray-900">
@@ -425,11 +450,17 @@ export default async function DashboardPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <PeriodSelector periods={periodList} selectedPeriodId={selectedPeriodId} />
             <span className="rounded border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-xs font-bold text-[#b45309]">
               未確定シフト {unconfirmedShifts.length}件
             </span>
             <span className="rounded border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600">
-              状態: {period?.status === "confirmed" ? "確定済み" : "下書き"}
+              状態:{" "}
+              {period?.status === "confirmed"
+                ? "確定済み"
+                : period?.status === "closed"
+                  ? "クローズ"
+                  : "下書き"}
             </span>
           </div>
         </section>
@@ -470,6 +501,63 @@ export default async function DashboardPage() {
           attendanceLogs={attendanceRows}
           employees={employeeRows}
         />
+
+        {/* Employee list with compliance flags */}
+        {employeeRows.length > 0 && (
+          <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">従業員一覧・配慮設定</h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  各従業員の法的配慮フラグを確認・編集できます。
+                </p>
+              </div>
+              <Users className="h-5 w-5 text-gray-400" />
+            </div>
+            <div className="divide-y divide-gray-100">
+              {employeeRows.map((emp) => (
+                <div
+                  key={emp.id}
+                  className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-gray-900">{emp.full_name}</p>
+                      <p className="text-xs text-gray-500">{emp.employee_code}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {emp.is_under_18 && (
+                        <span className="rounded bg-[#fffbeb] px-1.5 py-0.5 text-xs font-semibold text-[#b45309]">
+                          18歳未満
+                        </span>
+                      )}
+                      {emp.has_pregnancy_restriction && (
+                        <span className="rounded bg-[#fffbeb] px-1.5 py-0.5 text-xs font-semibold text-[#b45309]">
+                          妊産婦
+                        </span>
+                      )}
+                      {emp.needs_care_consideration && (
+                        <span className="rounded bg-[#fffbeb] px-1.5 py-0.5 text-xs font-semibold text-[#b45309]">
+                          介護・育児
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <EmployeeComplianceForm
+                    employee={{
+                      id: emp.id,
+                      full_name: emp.full_name,
+                      is_under_18: emp.is_under_18 ?? false,
+                      has_pregnancy_restriction: emp.has_pregnancy_restriction ?? false,
+                      needs_care_consideration: emp.needs_care_consideration ?? false,
+                      care_notes: emp.care_notes ?? null,
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <section className="xl:col-span-2 flex flex-col gap-6">
@@ -525,8 +613,6 @@ export default async function DashboardPage() {
           </section>
 
           <aside className="flex flex-col gap-6">
-            <AttendanceWorkbookImportForm />
-
             <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
               <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900">
                 <LockKeyhole className="h-4 w-4 text-[#0457a7]" />
@@ -558,6 +644,22 @@ export default async function DashboardPage() {
                   給与データ出力
                   <Download className="h-4 w-4" />
                 </Link>
+                {canClosePeriod && (
+                  <div className="flex flex-col gap-2">
+                    <form action={closeLatestPeriod}>
+                      <button
+                        className="flex w-full items-center justify-between rounded-lg border border-[#e73858]/30 bg-[#fff1f2] px-4 py-3 text-sm font-bold text-[#e73858] transition-colors hover:bg-[#ffe4e6]"
+                        type="submit"
+                      >
+                        期間をクローズ
+                        <Archive className="h-4 w-4" />
+                      </button>
+                    </form>
+                    <p className="text-xs leading-5 text-[#b45309]">
+                      クローズした期間は編集できなくなります。実績・給与データを確定後に実行してください。
+                    </p>
+                  </div>
+                )}
               </div>
               <p className="mt-3 text-xs leading-5 text-gray-500">
                 確定処理とCSV出力は、未解消警告と未確定シフトを確認してから実行してください。

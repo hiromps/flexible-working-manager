@@ -8,7 +8,6 @@ import {
   calculateOvertime,
   type WorkTimeInput,
 } from "@/lib/attendance/overtime";
-import { parseAttendanceWorkbook, toJstTimestamp } from "@/lib/attendance/workbook";
 
 export type DashboardActionState = {
   status: "idle" | "success" | "error";
@@ -89,6 +88,13 @@ const normalizeClosingRule = (value: string) =>
 
 const isWorkDayType = (value: string) => value === "出勤" || value === "蜃ｺ蜍､";
 
+const toJstTimestamp = (workDate: string, minutes: number | null): string | null => {
+  if (minutes === null) return null;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${workDate}T${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:00+09:00`;
+};
+
 const requireAdmin = async () => {
   const { userId } = await auth();
   if (!userId) {
@@ -150,177 +156,6 @@ const upsertOvertimeRows = async ({
     throw new Error(`残業計算の保存に失敗しました: ${error.message}`);
   }
 };
-
-export async function importAttendanceWorkbook(
-  _previousState: DashboardActionState,
-  formData: FormData,
-): Promise<DashboardActionState> {
-  try {
-    const { supabase } = await requireAdmin();
-    const file = formData.get("attendanceWorkbook");
-
-    if (!(file instanceof File) || file.size === 0) {
-      return {
-        status: "error",
-        message: "出勤簿.xlsx を選択してください。",
-      };
-    }
-
-    const preferredSheetName = formData.get("sheetName");
-    const weeklyLegalHoursValue = Number(formData.get("weeklyLegalHours") ?? 40);
-    const weeklyLegalHours = weeklyLegalHoursValue === 44 ? 44 : 40;
-    const parsed = parseAttendanceWorkbook(
-      await file.arrayBuffer(),
-      typeof preferredSheetName === "string" ? preferredSheetName : null,
-    );
-    const legalTotalMinutes = calculateLegalTotalMinutes(
-      weeklyLegalHours,
-      parsed.period.calendarDays,
-    );
-
-    const { data: employee, error: employeeError } = await supabase
-      .from("employees")
-      .upsert(
-        {
-          employee_code: parsed.employeeCode,
-          full_name: parsed.fullName,
-          department: parsed.department,
-          weekly_legal_hours: weeklyLegalHours,
-          is_variable_monthly: true,
-        },
-        { onConflict: "employee_code" },
-      )
-      .select("id, weekly_legal_hours")
-      .single();
-
-    if (employeeError || !employee) {
-      throw new Error(`社員の保存に失敗しました: ${employeeError?.message ?? "unknown"}`);
-    }
-
-    const { data: existingPeriods, error: periodFindError } = await supabase
-      .from("monthly_periods")
-      .select("id")
-      .eq("start_date", parsed.period.startDate)
-      .eq("end_date", parsed.period.endDate)
-      .limit(1);
-
-    if (periodFindError) {
-      throw new Error(`対象期間の確認に失敗しました: ${periodFindError.message}`);
-    }
-
-    const periodPayload = {
-      label: parsed.period.label,
-      start_date: parsed.period.startDate,
-      end_date: parsed.period.endDate,
-      base_date: parsed.period.baseDate,
-      legal_total_minutes: legalTotalMinutes,
-      status: "draft",
-    };
-    const existingPeriodId = existingPeriods?.[0]?.id as number | undefined;
-    const { data: period, error: periodError } = existingPeriodId
-      ? await supabase
-          .from("monthly_periods")
-          .update(periodPayload)
-          .eq("id", existingPeriodId)
-          .select("id")
-          .single()
-      : await supabase.from("monthly_periods").insert(periodPayload).select("id").single();
-
-    if (periodError || !period) {
-      throw new Error(`対象期間の保存に失敗しました: ${periodError?.message ?? "unknown"}`);
-    }
-
-    const shiftPayload = parsed.days
-      .filter((day) => day.plannedWorkMinutes > 0)
-      .map((day) => ({
-        employee_id: employee.id,
-        monthly_period_id: period.id,
-        work_date: day.workDate,
-        planned_start: toJstTimestamp(day.workDate, day.plannedStartMinutes),
-        planned_end: toJstTimestamp(day.workDate, day.plannedEndMinutes),
-        planned_break_minutes: day.plannedBreakMinutes,
-        planned_work_minutes: day.plannedWorkMinutes,
-        status: "draft",
-      }));
-
-    if (shiftPayload.length > 0) {
-      const { error } = await supabase
-        .from("shift_plans")
-        .upsert(shiftPayload, { onConflict: "employee_id,work_date" });
-
-      if (error) {
-        throw new Error(`シフト予定の保存に失敗しました: ${error.message}`);
-      }
-    }
-
-    const attendancePayload = parsed.days
-      .filter((day) => day.actualStartMinutes !== null || day.actualEndMinutes !== null)
-      .map((day) => ({
-        employee_id: employee.id,
-        work_date: day.workDate,
-        actual_start: toJstTimestamp(day.workDate, day.actualStartMinutes),
-        actual_end: toJstTimestamp(day.workDate, day.actualEndMinutes),
-        actual_break_minutes: day.actualBreakMinutes,
-        actual_work_minutes: day.actualWorkMinutes,
-        source_type: "import",
-      }));
-
-    if (attendancePayload.length > 0) {
-      const { error } = await supabase
-        .from("attendance_logs")
-        .upsert(attendancePayload, { onConflict: "employee_id,work_date" });
-
-      if (error) {
-        throw new Error(`勤怠実績の保存に失敗しました: ${error.message}`);
-      }
-    }
-
-    const calculationRows: WorkTimeInput[] = parsed.days
-      .filter((day) => day.plannedWorkMinutes > 0 || day.actualWorkMinutes > 0)
-      .map((day) => ({
-        employeeId: employee.id,
-        workDate: day.workDate,
-        plannedWorkMinutes: day.plannedWorkMinutes,
-        actualWorkMinutes: day.actualWorkMinutes > 0 ? day.actualWorkMinutes : day.plannedWorkMinutes,
-      }));
-
-    await upsertOvertimeRows({
-      supabase,
-      rows: calculateOvertime({
-        rows: calculationRows,
-        periodStart: parsed.period.startDate,
-        legalTotalMinutes,
-        weeklyLegalMinutes: weeklyLegalHours * 60,
-      }),
-    });
-
-    await supabase.from("audit_logs").insert({
-      action_type: "attendance_workbook_imported",
-      target_table: "monthly_periods",
-      target_id: String(period.id),
-      reason: `${file.name} / ${parsed.sheetName}`,
-      after_json: {
-        employeeCode: parsed.employeeCode,
-        employeeName: parsed.fullName,
-        importedShiftRows: shiftPayload.length,
-        importedAttendanceRows: attendancePayload.length,
-      },
-    });
-
-    revalidatePath("/dashboard");
-
-    return {
-      status: "success",
-      message: `${parsed.fullName}さんの出勤簿を取り込み、シフト${shiftPayload.length}件・実績${attendancePayload.length}件を保存しました。`,
-      details: parsed.importNotes,
-    };
-  } catch (error) {
-    return {
-      status: "error",
-      message: getErrorMessage(error),
-    };
-  }
-}
 
 export async function saveEmbeddedShiftWorkbook(
   _previousState: DashboardActionState,
@@ -672,11 +507,10 @@ export async function getAttendanceLogs(
   return data ?? [];
 }
 
-export async function approveCorrection(requestId: number) {
-  const { supabase } = await requireAdmin();
-
-  // 万が一マイグレーション未適用でエラーになる場合を考慮
+export async function approveCorrection(requestId: number): Promise<DashboardActionState> {
   try {
+    const { supabase } = await requireAdmin();
+
     const { data: request, error: reqError } = await supabase
       .from("attendance_correction_requests")
       .select("*")
@@ -706,7 +540,7 @@ export async function approveCorrection(requestId: number) {
       actual_end: request.requested_end,
       actual_break_minutes: breakMins,
       actual_work_minutes: workMinutes,
-      source_type: "admin", // または correction
+      source_type: "admin",
       updated_at: new Date().toISOString(),
     };
 
@@ -724,22 +558,80 @@ export async function approveCorrection(requestId: number) {
     await recalculateLatestPeriod();
 
     revalidatePath("/dashboard");
-  } catch (e) {
-    console.error("Error approving correction", e);
+    revalidatePath("/attendance");
+    return { status: "success", message: "修正申請を承認しました。" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
   }
 }
 
-export async function rejectCorrection(requestId: number) {
-  const { supabase } = await requireAdmin();
+export async function rejectCorrection(requestId: number): Promise<DashboardActionState> {
   try {
+    const { supabase } = await requireAdmin();
     await supabase
       .from("attendance_correction_requests")
       .update({ status: "rejected", updated_at: new Date().toISOString() })
       .eq("id", requestId);
     revalidatePath("/dashboard");
-  } catch (e) {
-    console.error("Error rejecting correction", e);
+    revalidatePath("/attendance");
+    return { status: "success", message: "修正申請を却下しました。" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
   }
+}
+
+export async function updateEmployeeComplianceFlags(
+  employeeId: number,
+  flags: {
+    is_under_18: boolean;
+    has_pregnancy_restriction: boolean;
+    needs_care_consideration: boolean;
+    care_notes: string | null;
+  },
+): Promise<DashboardActionState> {
+  try {
+    const { supabase } = await requireAdmin();
+    const { error } = await supabase
+      .from("employees")
+      .update({
+        is_under_18: flags.is_under_18,
+        has_pregnancy_restriction: flags.has_pregnancy_restriction,
+        needs_care_consideration: flags.needs_care_consideration,
+        care_notes: flags.care_notes || null,
+      })
+      .eq("id", employeeId);
+    if (error) throw new Error(`社員情報の更新に失敗しました: ${error.message}`);
+    revalidatePath("/dashboard");
+    return { status: "success", message: "配慮フラグを更新しました。" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function closeLatestPeriod(): Promise<void> {
+  const { supabase, userId } = await requireAdmin();
+  const period = await getLatestPeriod(supabase);
+  if (!period) throw new Error("対象期間が未設定です。");
+  if (period.status !== "confirmed") throw new Error("確定済みの期間のみクローズできます。");
+
+  const { error } = await supabase
+    .from("monthly_periods")
+    .update({ status: "closed" })
+    .eq("id", period.id);
+  if (error) throw new Error(`期間クローズに失敗しました: ${error.message}`);
+
+  await supabase.from("audit_logs").insert({
+    actor_user_id: userId,
+    action_type: "monthly_period_closed",
+    target_table: "monthly_periods",
+    target_id: String(period.id),
+    reason: "管理者ダッシュボードからクローズ",
+    before_json: { status: "confirmed" },
+    after_json: { status: "closed" },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/attendance");
 }
 
 export async function confirmLatestPeriodShifts(): Promise<void> {

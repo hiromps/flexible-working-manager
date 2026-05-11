@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, X } from "lucide-react";
+import { Check, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { approveCorrection, rejectCorrection } from "./actions";
 
 type RequestType = {
@@ -21,6 +21,12 @@ type EmployeeOption = {
   employee_code: string;
 };
 
+type ActionResult = {
+  requestId: number;
+  status: "success" | "error";
+  message: string;
+};
+
 const formatTime = (isoString: string | null) => {
   if (!isoString) return "未打刻";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -38,31 +44,30 @@ export function CorrectionList({
   employees: EmployeeOption[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const [actionResult, setActionResult] = useState<ActionResult | null>(null);
 
   const handleApprove = (id: number) => {
+    setActionResult(null);
     startTransition(async () => {
-      try {
-        await approveCorrection(id);
-        alert("承認しました。");
-      } catch (err: any) {
-        alert(err.message || "エラーが発生しました");
+      const result = await approveCorrection(id);
+      if (result.status !== "idle") {
+        setActionResult({ requestId: id, status: result.status, message: result.message });
       }
     });
   };
 
   const handleReject = (id: number) => {
+    setActionResult(null);
     startTransition(async () => {
-      try {
-        await rejectCorrection(id);
-        alert("却下しました。");
-      } catch (err: any) {
-        alert(err.message || "エラーが発生しました");
+      const result = await rejectCorrection(id);
+      if (result.status !== "idle") {
+        setActionResult({ requestId: id, status: result.status, message: result.message });
       }
     });
   };
 
   if (!requests || requests.length === 0) {
-    return null; // 保留中の申請がない場合は非表示にするか、「申請はありません」を表示する
+    return null;
   }
 
   return (
@@ -73,33 +78,55 @@ export function CorrectionList({
           従業員からの打刻修正申請です。内容を確認し、承認または却下してください。
         </p>
       </div>
+
+      {actionResult && (
+        <div
+          className={`flex items-start gap-2 px-5 py-3 text-sm font-medium ${
+            actionResult.status === "success"
+              ? "bg-[#f0fdf4] text-[#047857]"
+              : "bg-[#fff1f2] text-[#e73858]"
+          }`}
+        >
+          {actionResult.status === "success" ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          ) : (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          )}
+          <span>{actionResult.message}</span>
+        </div>
+      )}
+
       <div className="divide-y divide-gray-100">
         {requests.map((req) => {
           const emp = employees.find((e) => e.id === req.employee_id);
           const empName = emp ? `${emp.full_name} (${emp.employee_code})` : "不明な従業員";
+          const isThisRequestPending = isPending;
+
           return (
             <article key={req.id} className="p-5 transition-colors hover:bg-gray-50">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-bold text-gray-900">
-                    {empName} <span className="ml-2 font-mono text-xs text-gray-500">{req.work_date}</span>
+                    {empName}{" "}
+                    <span className="ml-2 font-mono text-xs text-gray-500">{req.work_date}</span>
                   </p>
                   <p className="mt-2 font-mono text-sm text-gray-700">
-                    出社: {formatTime(req.requested_start)} / 退社: {formatTime(req.requested_end)} / 休憩: {req.requested_break_minutes}分
+                    出社: {formatTime(req.requested_start)} / 退社: {formatTime(req.requested_end)}{" "}
+                    / 休憩: {req.requested_break_minutes}分
                   </p>
-                  <p className="mt-1 text-xs text-red-600 font-bold">理由: {req.reason}</p>
+                  <p className="mt-1 text-xs font-bold text-red-600">理由: {req.reason}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleReject(req.id)}
-                    disabled={isPending}
+                    disabled={isThisRequestPending}
                     className="flex items-center gap-1 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                   >
                     <X className="h-4 w-4" /> 却下
                   </button>
                   <button
                     onClick={() => handleApprove(req.id)}
-                    disabled={isPending}
+                    disabled={isThisRequestPending}
                     className="flex items-center gap-1 rounded border border-[#047857] bg-[#f0fdf4] px-3 py-1.5 text-xs font-bold text-[#047857] transition hover:bg-[#dcfce7] disabled:opacity-50"
                   >
                     <Check className="h-4 w-4" /> 承認

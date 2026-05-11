@@ -30,6 +30,30 @@ type ShiftPlan = {
   status: string;
 };
 
+type CorrectionRequest = {
+  id: number;
+  work_date: string;
+  requested_start: string | null;
+  requested_end: string | null;
+  requested_break_minutes: number;
+  status: string;
+  reason: string;
+  created_at: string;
+};
+
+type MonthlyShift = {
+  work_date: string;
+  planned_start: string | null;
+  planned_end: string | null;
+  planned_break_minutes: number;
+  planned_work_minutes: number;
+  status: string;
+  monthly_periods: {
+    start_date: string;
+    end_date: string;
+  }[];
+};
+
 const getSupabaseAdmin = () =>
   createSupabaseAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -88,7 +112,7 @@ export default async function AttendancePage() {
 
   const supabaseAdmin = getSupabaseAdmin();
 
-  let { data: employee } = await supabaseAdmin
+  const { data: employee } = await supabaseAdmin
     .from("employees")
     .select("id, full_name, employee_code, department")
     .eq("user_id", userId)
@@ -103,7 +127,13 @@ export default async function AttendancePage() {
   const todayStr = toJstYmd(new Date());
   const todayDate = dateFormatter.format(new Date(`${todayStr}T00:00:00+09:00`));
 
-  const [{ data: todaysLog }, { data: todaysShifts }, { data: recentLogs }] = await Promise.all([
+  const [
+    { data: todaysLog },
+    { data: todaysShifts },
+    { data: recentLogs },
+    { data: correctionRequests },
+    { data: currentShifts },
+  ] = await Promise.all([
     supabaseAdmin
       .from("attendance_logs")
       .select(
@@ -124,11 +154,26 @@ export default async function AttendancePage() {
       .eq("employee_id", typedEmployee.id)
       .order("work_date", { ascending: false })
       .limit(7),
+    supabaseAdmin
+      .from("attendance_correction_requests")
+      .select("id, work_date, requested_start, requested_end, requested_break_minutes, status, reason, created_at")
+      .eq("employee_id", typedEmployee.id)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    supabaseAdmin
+      .from("shift_plans")
+      .select("work_date, planned_start, planned_end, planned_break_minutes, planned_work_minutes, status, monthly_periods!inner(start_date, end_date)")
+      .eq("employee_id", typedEmployee.id)
+      .lte("monthly_periods.start_date", todayStr)
+      .gte("monthly_periods.end_date", todayStr)
+      .order("work_date", { ascending: true }),
   ]);
 
   const typedTodaysLog = (todaysLog ?? null) as AttendanceLog | null;
   const typedTodaysShift = (todaysShifts?.[0] ?? null) as ShiftPlan | null;
   const typedRecentLogs = (recentLogs ?? []) as AttendanceLog[];
+  const typedCorrectionRequests = (correctionRequests ?? []) as CorrectionRequest[];
+  const typedCurrentShifts = (currentShifts ?? []) as MonthlyShift[];
 
   return (
     <main className="min-h-screen bg-[#f8fafc]">
@@ -235,7 +280,7 @@ export default async function AttendancePage() {
         </aside>
       </div>
 
-      <section className="mx-auto max-w-6xl px-5 pb-8">
+      <section className="mx-auto max-w-6xl px-5 pb-5">
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 p-5">
             <h2 className="text-base font-bold text-gray-950">直近の打刻</h2>
@@ -293,6 +338,166 @@ export default async function AttendancePage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      {typedCorrectionRequests.length > 0 && (
+        <section className="mx-auto max-w-6xl px-5 pb-5">
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 p-5">
+              <h2 className="text-base font-bold text-gray-950">修正申請履歴</h2>
+              <p className="mt-1 text-sm text-gray-500">打刻修正の申請状況です。</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-xs font-bold text-gray-500">
+                    <th className="border-b border-gray-200 px-4 py-3">対象日</th>
+                    <th className="border-b border-gray-200 px-4 py-3">申請出社</th>
+                    <th className="border-b border-gray-200 px-4 py-3">申請退社</th>
+                    <th className="border-b border-gray-200 px-4 py-3">申請理由</th>
+                    <th className="border-b border-gray-200 px-4 py-3">状態</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {typedCorrectionRequests.map((req) => {
+                    const reqStartTime = req.requested_start
+                      ? new Date(req.requested_start).toLocaleTimeString("ja-JP", {
+                          timeZone: "Asia/Tokyo",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        })
+                      : "--:--";
+                    const reqEndTime = req.requested_end
+                      ? new Date(req.requested_end).toLocaleTimeString("ja-JP", {
+                          timeZone: "Asia/Tokyo",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        })
+                      : "--:--";
+                    const truncatedReason =
+                      req.reason.length > 30 ? `${req.reason.slice(0, 30)}…` : req.reason;
+                    const statusBadge =
+                      req.status === "approved"
+                        ? { label: "承認済み", className: "bg-green-100 text-green-700" }
+                        : req.status === "rejected"
+                          ? { label: "却下", className: "bg-red-100 text-red-700" }
+                          : { label: "審査中", className: "bg-yellow-100 text-yellow-700" };
+                    return (
+                      <tr key={req.id} className="bg-white">
+                        <td className="border-b border-gray-100 px-4 py-3 font-bold text-gray-950">
+                          {formatYmd(req.work_date)}
+                        </td>
+                        <td className="border-b border-gray-100 px-4 py-3 font-mono">
+                          {reqStartTime}
+                        </td>
+                        <td className="border-b border-gray-100 px-4 py-3 font-mono">
+                          {reqEndTime}
+                        </td>
+                        <td className="border-b border-gray-100 px-4 py-3 text-gray-700">
+                          {truncatedReason}
+                        </td>
+                        <td className="border-b border-gray-100 px-4 py-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}
+                          >
+                            {statusBadge.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="mx-auto max-w-6xl px-5 pb-8">
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <details>
+            <summary className="cursor-pointer select-none list-none p-5 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-gray-950">今月のシフト予定</h2>
+                  <p className="mt-1 text-sm text-gray-500">今月の確定シフト一覧です。</p>
+                </div>
+                <span className="text-sm font-bold text-[#0457a7]">表示 / 非表示</span>
+              </div>
+            </summary>
+            <div className="border-t border-gray-100">
+              {typedCurrentShifts.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs font-bold text-gray-500">
+                        <th className="border-b border-gray-200 px-4 py-3">日付</th>
+                        <th className="border-b border-gray-200 px-4 py-3">出勤予定</th>
+                        <th className="border-b border-gray-200 px-4 py-3">退勤予定</th>
+                        <th className="border-b border-gray-200 px-4 py-3">休憩</th>
+                        <th className="border-b border-gray-200 px-4 py-3">予定時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typedCurrentShifts.map((shift) => {
+                        const isToday = shift.work_date === todayStr;
+                        const shiftStart = shift.planned_start
+                          ? new Intl.DateTimeFormat("ja-JP", {
+                              timeZone: "Asia/Tokyo",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            }).format(new Date(shift.planned_start))
+                          : "--:--";
+                        const shiftEnd = shift.planned_end
+                          ? new Intl.DateTimeFormat("ja-JP", {
+                              timeZone: "Asia/Tokyo",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            }).format(new Date(shift.planned_end))
+                          : "--:--";
+                        return (
+                          <tr
+                            key={shift.work_date}
+                            className={isToday ? "bg-[#eff6ff]" : "bg-white"}
+                          >
+                            <td
+                              className={`border-b border-gray-100 px-4 py-3 font-bold ${isToday ? "text-[#0457a7]" : "text-gray-950"}`}
+                            >
+                              {formatYmd(shift.work_date)}
+                              {isToday && (
+                                <span className="ml-2 rounded-full bg-[#0457a7] px-2 py-0.5 text-xs font-medium text-white">
+                                  今日
+                                </span>
+                              )}
+                            </td>
+                            <td className="border-b border-gray-100 px-4 py-3 font-mono">
+                              {shiftStart}
+                            </td>
+                            <td className="border-b border-gray-100 px-4 py-3 font-mono">
+                              {shiftEnd}
+                            </td>
+                            <td className="border-b border-gray-100 px-4 py-3">
+                              {formatDuration(shift.planned_break_minutes)}
+                            </td>
+                            <td className="border-b border-gray-100 px-4 py-3">
+                              {formatDuration(shift.planned_work_minutes)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="px-5 py-6 text-center text-sm text-gray-500">シフト未登録</p>
+              )}
+            </div>
+          </details>
         </div>
       </section>
     </main>
