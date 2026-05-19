@@ -110,6 +110,12 @@ const generateBlankRows = (year: number, month: number, closingRule: string) => 
   });
 };
 
+const formatMinutesAsTime = (minutes: number) => {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
+
 const applyAiShiftRules = ({
   rows,
   weeklyLegalHours,
@@ -127,53 +133,56 @@ const applyAiShiftRules = ({
   defaultEndTime: string;
   defaultBreakMinutes: number;
 }) => {
-  const existingPatterns = rows
-    .filter((r) => r.dayType === "出勤" && r.plannedStart && r.plannedEnd)
-    .map((r) => ({
-      start: r.plannedStart,
-      end: r.plannedEnd,
-      breakMins: r.plannedBreakMinutes,
-    }));
+  // 「開始」「終了」を勤務可能帯の上下限として扱う。
+  // 1日のシフト長は休憩込みで9時間 (実労働8h + 休憩60分) 固定。
+  // 開始時刻のみ、最早開始 〜 (最遅終了 - シフト長) の範囲内で15分刻みにランダム化する。
+  const SHIFT_SPAN_MINUTES = 8 * 60 + 60; // 実労働8h + 休憩60分
+  const STEP_MINUTES = 15;
+  const breakMins = defaultBreakMinutes;
 
-  const uniquePatterns: Array<{ start: string; end: string; breakMins: number }> = [];
-  const seen = new Set<string>();
-  for (const p of existingPatterns) {
-    const key = `${p.start}-${p.end}-${p.breakMins}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniquePatterns.push(p);
-    }
-  }
+  const windowStart = parseTime(defaultStartTime) ?? 8 * 60;
+  const windowEndRaw = parseTime(defaultEndTime) ?? 17 * 60;
+  const windowEnd = windowEndRaw <= windowStart ? windowEndRaw + 24 * 60 : windowEndRaw;
 
-  const defaultPatterns = [
-    { start: defaultStartTime, end: defaultEndTime, breakMins: defaultBreakMinutes },
-  ];
+  const latestStart = windowEnd - SHIFT_SPAN_MINUTES;
+  // 範囲が狭すぎてシフト長が収まらない場合は開始固定。
+  const hasRandomRange = latestStart > windowStart;
+  const stepCount = hasRandomRange
+    ? Math.floor((latestStart - windowStart) / STEP_MINUTES) + 1
+    : 1;
 
-  const shiftPatterns = uniquePatterns.length > 0 ? uniquePatterns : defaultPatterns;
+  const pickStart = () => {
+    if (!hasRandomRange) return windowStart;
+    const offset = Math.floor(Math.random() * stepCount) * STEP_MINUTES;
+    return windowStart + offset;
+  };
 
-  const workingRows = rows.map((row, index) => {
+  const workingRows = rows.map((row) => {
     const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
+    // 打刻済みの日は触らない。
     if (log && typeof log.actual_work_minutes === "number" && log.actual_work_minutes > 0) {
       return { ...row };
     }
 
     const isWeekend = row.weekday === "土" || row.weekday === "日";
-    
-    // 既存の入力がある場合はそれを活かす
-    const hasExistingInput = row.dayType === "出勤" && row.plannedStart && row.plannedEnd;
-    if (hasExistingInput) {
-      return { ...row };
+    if (isWeekend) {
+      return {
+        ...row,
+        dayType: "休日",
+        plannedStart: "",
+        plannedEnd: "",
+        plannedBreakMinutes: 0,
+      };
     }
 
-    // 未入力の平日はパターンから割り当てる
-    const pattern = shiftPatterns[index % shiftPatterns.length];
-
+    const startMins = pickStart();
+    const endMins = startMins + SHIFT_SPAN_MINUTES;
     return {
       ...row,
-      dayType: isWeekend ? "休日" : "出勤",
-      plannedStart: isWeekend ? "" : pattern.start,
-      plannedEnd: isWeekend ? "" : pattern.end,
-      plannedBreakMinutes: isWeekend ? 0 : pattern.breakMins,
+      dayType: "出勤",
+      plannedStart: formatMinutesAsTime(startMins),
+      plannedEnd: formatMinutesAsTime(endMins),
+      plannedBreakMinutes: breakMins,
     };
   });
 
@@ -218,12 +227,10 @@ const applyAiShiftRules = ({
         
         const startMins = parseTime(row.plannedStart) ?? 480; // default 08:00
         const newEndMins = startMins + newWorkMinutes + row.plannedBreakMinutes;
-        const endH = Math.floor(newEndMins / 60) % 24;
-        const endM = newEndMins % 60;
-        
+
         workingRows[globalIndex] = {
           ...row,
-          plannedEnd: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
+          plannedEnd: formatMinutesAsTime(newEndMins),
         };
       }
     }
@@ -259,12 +266,10 @@ const applyAiShiftRules = ({
       
       const startMins = parseTime(row.plannedStart) ?? 480;
       const newEndMins = startMins + newWorkMinutes + row.plannedBreakMinutes;
-      const endH = Math.floor(newEndMins / 60) % 24;
-      const endM = newEndMins % 60;
-      
+
       workingRows[index] = {
         ...row,
-        plannedEnd: `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`,
+        plannedEnd: formatMinutesAsTime(newEndMins),
       };
     }
   }
@@ -290,7 +295,7 @@ export function EmbeddedShiftWorkbook({
   const [weeklyLegalHours, setWeeklyLegalHours] = useState(40);
   const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? 0);
   const [defaultStartTime, setDefaultStartTime] = useState("08:00");
-  const [defaultEndTime, setDefaultEndTime] = useState("17:00");
+  const [defaultEndTime, setDefaultEndTime] = useState("20:00");
   const [defaultBreakMinutes, setDefaultBreakMinutes] = useState(60);
   const selectedEmployee = employees.find((employee) => employee.id === employeeId);
   const [employeeCode, setEmployeeCode] = useState(selectedEmployee?.employee_code ?? "");
@@ -543,13 +548,13 @@ export function EmbeddedShiftWorkbook({
           <div className="col-span-12 border-t border-gray-100 my-2"></div>
           
           <div className="col-span-12 flex flex-col gap-1 sm:flex-row sm:items-center justify-between">
-            <h4 className="text-sm font-bold text-gray-700">AIシフト自動生成・基本設定</h4>
-            <span className="text-xs text-gray-500">※未入力の平日や、区分の切り替え時にこの時間がセットされます</span>
+            <h4 className="text-sm font-bold text-gray-700">AIシフト自動生成・勤務可能帯</h4>
+            <span className="text-xs text-gray-500">※この範囲内で、平日のみ9時間枠（実労働8h+休憩60分）を開始時刻ランダムで自動生成します</span>
           </div>
 
           <div className="col-span-12 flex flex-wrap gap-4">
             <label className="flex flex-col gap-1 text-xs font-bold text-[#0457a7]">
-              開始 (基本)
+              最早開始
               <input
                 className="w-32 rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
                 onChange={(event) => setDefaultStartTime(event.target.value)}
@@ -558,7 +563,7 @@ export function EmbeddedShiftWorkbook({
               />
             </label>
             <label className="flex flex-col gap-1 text-xs font-bold text-[#0457a7]">
-              終了 (基本)
+              最遅終了
               <input
                 className="w-32 rounded-lg border border-[#0457a7]/30 bg-[#eff6ff] px-3 py-2 text-sm font-mono text-[#0457a7] focus:border-[#0457a7] focus:outline-none focus:ring-1 focus:ring-[#0457a7]"
                 onChange={(event) => setDefaultEndTime(event.target.value)}
