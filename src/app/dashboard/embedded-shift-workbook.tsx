@@ -133,29 +133,43 @@ const applyAiShiftRules = ({
   defaultEndTime: string;
   defaultBreakMinutes: number;
 }) => {
-  // 「開始」「終了」を勤務可能帯の上下限として扱う。
-  // 1日のシフト長は休憩込みで9時間 (実労働8h + 休憩60分) 固定。
+  // 「最早開始」「最遅終了」を勤務可能帯の上下限として扱う。
+  // シフト長は窓幅に応じて自動調整 (実労働 最大8h / 最小4h)。
+  // 休憩は労基法34条準拠: 実労働6h超で45分以上、8hで60分以上。
   // 開始時刻のみ、最早開始 〜 (最遅終了 - シフト長) の範囲内で15分刻みにランダム化する。
-  const SHIFT_SPAN_MINUTES = 8 * 60 + 60; // 実労働8h + 休憩60分
   const STEP_MINUTES = 15;
-  const breakMins = defaultBreakMinutes;
+  const MAX_WORK_MINUTES = 8 * 60;
+  const MIN_WORK_MINUTES = 4 * 60;
+
+  // 実労働時間に対する法定最低休憩 (労基法34条)
+  const requiredBreakFor = (workMins: number) => {
+    if (workMins > 8 * 60) return 60;
+    if (workMins > 6 * 60) return 45;
+    return 0;
+  };
+
+  // 窓幅 (= 最遅終了 - 最早開始) から、その日のシフト長 (実労働 + 休憩) を決める
+  const planShiftSpan = (windowWidth: number) => {
+    // 実労働の希望値: 8h を上限に、窓幅から最大限取る
+    // workMins + requiredBreakFor(workMins) <= windowWidth を満たす最大の workMins を探す
+    const userBreak = Math.max(0, defaultBreakMinutes);
+    // ユーザー指定休憩を優先しつつ、法定最低休憩は必ず確保する
+    const candidates = [MAX_WORK_MINUTES, 7 * 60, 6 * 60, 5 * 60, MIN_WORK_MINUTES];
+    for (const workMins of candidates) {
+      const breakMins = Math.max(userBreak, requiredBreakFor(workMins));
+      if (workMins + breakMins <= windowWidth) {
+        return { workMins, breakMins, span: workMins + breakMins };
+      }
+    }
+    return null; // 窓が狭すぎてシフトが組めない
+  };
 
   const windowStart = parseTime(defaultStartTime) ?? 8 * 60;
   const windowEndRaw = parseTime(defaultEndTime) ?? 17 * 60;
   const windowEnd = windowEndRaw <= windowStart ? windowEndRaw + 24 * 60 : windowEndRaw;
+  const windowWidth = windowEnd - windowStart;
 
-  const latestStart = windowEnd - SHIFT_SPAN_MINUTES;
-  // 範囲が狭すぎてシフト長が収まらない場合は開始固定。
-  const hasRandomRange = latestStart > windowStart;
-  const stepCount = hasRandomRange
-    ? Math.floor((latestStart - windowStart) / STEP_MINUTES) + 1
-    : 1;
-
-  const pickStart = () => {
-    if (!hasRandomRange) return windowStart;
-    const offset = Math.floor(Math.random() * stepCount) * STEP_MINUTES;
-    return windowStart + offset;
-  };
+  const shiftPlan = planShiftSpan(windowWidth);
 
   const workingRows = rows.map((row) => {
     const log = fetchedLogs.find((l) => l.employee_id === employeeId && l.work_date === row.workDate);
@@ -165,7 +179,7 @@ const applyAiShiftRules = ({
     }
 
     const isWeekend = row.weekday === "土" || row.weekday === "日";
-    if (isWeekend) {
+    if (isWeekend || !shiftPlan) {
       return {
         ...row,
         dayType: "休日",
@@ -175,14 +189,19 @@ const applyAiShiftRules = ({
       };
     }
 
-    const startMins = pickStart();
-    const endMins = startMins + SHIFT_SPAN_MINUTES;
+    // [windowStart, windowEnd - span] の範囲を 15分刻みでランダム選択
+    const latestStart = windowEnd - shiftPlan.span;
+    const stepCount = Math.max(1, Math.floor((latestStart - windowStart) / STEP_MINUTES) + 1);
+    const offset = Math.floor(Math.random() * stepCount) * STEP_MINUTES;
+    const startMins = windowStart + offset;
+    const endMins = startMins + shiftPlan.span;
+
     return {
       ...row,
       dayType: "出勤",
       plannedStart: formatMinutesAsTime(startMins),
       plannedEnd: formatMinutesAsTime(endMins),
-      plannedBreakMinutes: breakMins,
+      plannedBreakMinutes: shiftPlan.breakMins,
     };
   });
 
@@ -549,7 +568,7 @@ export function EmbeddedShiftWorkbook({
           
           <div className="col-span-12 flex flex-col gap-1 sm:flex-row sm:items-center justify-between">
             <h4 className="text-sm font-bold text-gray-700">AIシフト自動生成・勤務可能帯</h4>
-            <span className="text-xs text-gray-500">※この範囲内で、平日のみ9時間枠（実労働8h+休憩60分）を開始時刻ランダムで自動生成します</span>
+            <span className="text-xs text-gray-500">※この範囲内に収まるシフト長を自動決定し、平日のみ開始時刻ランダムで生成します（実労働 最大8h、休憩は労基法34条準拠）</span>
           </div>
 
           <div className="col-span-12 flex flex-wrap gap-4">
